@@ -151,9 +151,8 @@
 	var NoToneMapping = 0;
 	var LinearToneMapping = 1;
 	var ReinhardToneMapping = 2;
-	var Uncharted2ToneMapping = 3;
-	var CineonToneMapping = 4;
-	var ACESFilmicToneMapping = 5;
+	var CineonToneMapping = 3;
+	var ACESFilmicToneMapping = 4;
 
 	var UVMapping = 300;
 	var CubeReflectionMapping = 301;
@@ -2575,6 +2574,73 @@
 		dispose: function () {
 
 			this.dispatchEvent( { type: 'dispose' } );
+
+		}
+
+	} );
+
+	/**
+	 * @author Matt DesLauriers / @mattdesl
+	 * @author Takahiro https://github.com/takahirox
+	 */
+
+	function WebGLMultiRenderTarget( width, height, numAttachments, options ) {
+
+		WebGLRenderTarget.call( this, width, height, options );
+
+		this.textures = [];
+
+		for ( var i = 0; i < numAttachments; i ++ ) {
+
+			this.textures[ i ] = this.texture.clone();
+
+		}
+
+	}
+
+	WebGLMultiRenderTarget.prototype = Object.assign( Object.create( WebGLRenderTarget.prototype ), {
+
+		constructor: WebGLMultiRenderTarget,
+
+		isWebGLMultiRenderTarget: true,
+
+		copy: function ( source ) {
+
+			WebGLRenderTarget.prototype.copy.call( this, source );
+
+			this.textures.length = 0;
+
+			for ( var i = 0, il = source.textures.length; i < il; i ++ ) {
+
+				this.textures[ i ] = source.textures[ i ].clone();
+
+			}
+
+			return this;
+
+		},
+
+		setNumAttachments: function setNumAttachments( num ) {
+
+			if ( this.textures.length !== num ) {
+
+				this.dispose();
+
+				if ( num > this.textures.length ) {
+
+					for ( var i = this.textures.length; i < num; i ++ ) {
+
+						this.textures[ i ] = this.texture.clone();
+
+					}
+
+				} else {
+
+					this.textures.length = num;
+
+				}
+
+			}
 
 		}
 
@@ -15013,7 +15079,7 @@
 
 	var tonemapping_fragment = "#if defined( TONE_MAPPING )\n\tgl_FragColor.rgb = toneMapping( gl_FragColor.rgb );\n#endif";
 
-	var tonemapping_pars_fragment = "#ifndef saturate\n#define saturate(a) clamp( a, 0.0, 1.0 )\n#endif\nuniform float toneMappingExposure;\nvec3 LinearToneMapping( vec3 color ) {\n\treturn toneMappingExposure * color;\n}\nvec3 ReinhardToneMapping( vec3 color ) {\n\tcolor *= toneMappingExposure;\n\treturn saturate( color / ( vec3( 1.0 ) + color ) );\n}\n#define Uncharted2Helper( x ) max( ( ( x * ( 0.15 * x + 0.10 * 0.50 ) + 0.20 * 0.02 ) / ( x * ( 0.15 * x + 0.50 ) + 0.20 * 0.30 ) ) - 0.02 / 0.30, vec3( 0.0 ) )\nvec3 Uncharted2ToneMapping( vec3 color ) {\n\tcolor *= toneMappingExposure;\n\treturn saturate( Uncharted2Helper( color ) / Uncharted2Helper( vec3( 1.0 ) ) );\n}\nvec3 OptimizedCineonToneMapping( vec3 color ) {\n\tcolor *= toneMappingExposure;\n\tcolor = max( vec3( 0.0 ), color - 0.004 );\n\treturn pow( ( color * ( 6.2 * color + 0.5 ) ) / ( color * ( 6.2 * color + 1.7 ) + 0.06 ), vec3( 2.2 ) );\n}\nvec3 ACESFilmicToneMapping( vec3 color ) {\n\tcolor *= toneMappingExposure;\n\treturn saturate( ( color * ( 2.51 * color + 0.03 ) ) / ( color * ( 2.43 * color + 0.59 ) + 0.14 ) );\n}";
+	var tonemapping_pars_fragment = "#ifndef saturate\n#define saturate(a) clamp( a, 0.0, 1.0 )\n#endif\nuniform float toneMappingExposure;\nvec3 LinearToneMapping( vec3 color ) {\n\treturn toneMappingExposure * color;\n}\nvec3 ReinhardToneMapping( vec3 color ) {\n\tcolor *= toneMappingExposure;\n\treturn saturate( color / ( vec3( 1.0 ) + color ) );\n}\nvec3 OptimizedCineonToneMapping( vec3 color ) {\n\tcolor *= toneMappingExposure;\n\tcolor = max( vec3( 0.0 ), color - 0.004 );\n\treturn pow( ( color * ( 6.2 * color + 0.5 ) ) / ( color * ( 6.2 * color + 1.7 ) + 0.06 ), vec3( 2.2 ) );\n}\nvec3 ACESFilmicToneMapping( vec3 color ) {\n\tcolor *= toneMappingExposure;\n\treturn saturate( ( color * ( 2.51 * color + 0.03 ) ) / ( color * ( 2.43 * color + 0.59 ) + 0.14 ) );\n}";
 
 	var uv_pars_fragment = "#if ( defined( USE_UV ) && ! defined( UVS_VERTEX_ONLY ) )\n\tvarying vec2 vUv;\n#endif";
 
@@ -15898,6 +15964,7 @@
 		var floatVertexTextures = vertexTextures && floatFragmentTextures;
 
 		var maxSamples = isWebGL2 ? gl.getParameter( 36183 ) : 0;
+		var multiRenderTarget = isWebGL2 || !! extensions.get( 'WEBGL_draw_buffers' );
 
 		return {
 
@@ -15923,7 +15990,8 @@
 			floatFragmentTextures: floatFragmentTextures,
 			floatVertexTextures: floatVertexTextures,
 
-			maxSamples: maxSamples
+			maxSamples: maxSamples,
+			multiRenderTarget: multiRenderTarget
 
 		};
 
@@ -17777,10 +17845,6 @@
 
 			case ReinhardToneMapping:
 				toneMappingName = 'Reinhard';
-				break;
-
-			case Uncharted2ToneMapping:
-				toneMappingName = 'Uncharted2';
 				break;
 
 			case CineonToneMapping:
@@ -21677,9 +21741,32 @@
 
 				_gl.deleteFramebuffer( renderTargetProperties.__webglFramebuffer );
 				if ( renderTargetProperties.__webglDepthbuffer ) { _gl.deleteRenderbuffer( renderTargetProperties.__webglDepthbuffer ); }
+
 				if ( renderTargetProperties.__webglMultisampledFramebuffer ) { _gl.deleteFramebuffer( renderTargetProperties.__webglMultisampledFramebuffer ); }
 				if ( renderTargetProperties.__webglColorRenderbuffer ) { _gl.deleteRenderbuffer( renderTargetProperties.__webglColorRenderbuffer ); }
 				if ( renderTargetProperties.__webglDepthRenderbuffer ) { _gl.deleteRenderbuffer( renderTargetProperties.__webglDepthRenderbuffer ); }
+
+			}
+
+			if ( renderTarget.isWebGLMultiRenderTarget ) {
+
+				var textures = renderTarget.textures;
+
+				for ( var i$1 = 0, il = textures.length; i$1 < il; i$1 ++ ) {
+
+					var attachmentProperties = properties.get( textures[ i$1 ] );
+
+					if ( attachmentProperties.__webglTexture ) {
+
+						_gl.deleteTexture( attachmentProperties.__webglTexture );
+
+						info.memory.textures --;
+
+					}
+
+					properties.remove( textures[ i$1 ] );
+
+				}
 
 			}
 
@@ -22230,14 +22317,14 @@
 		// Render targets
 
 		// Setup storage for target texture and bind it to correct framebuffer
-		function setupFrameBufferTexture( framebuffer, renderTarget, attachment, textureTarget ) {
+		function setupFrameBufferTexture( framebuffer, renderTarget, texture, attachment, textureTarget ) {
 
-			var glFormat = utils.convert( renderTarget.texture.format );
-			var glType = utils.convert( renderTarget.texture.type );
-			var glInternalFormat = getInternalFormat( renderTarget.texture.internalFormat, glFormat, glType );
+			var glFormat = utils.convert( texture.format );
+			var glType = utils.convert( texture.type );
+			var glInternalFormat = getInternalFormat( texture.internalFormat, glFormat, glType );
 			state.texImage2D( textureTarget, 0, glInternalFormat, renderTarget.width, renderTarget.height, 0, glFormat, glType, null );
 			_gl.bindFramebuffer( 36160, framebuffer );
-			_gl.framebufferTexture2D( 36160, attachment, textureTarget, properties.get( renderTarget.texture ).__webglTexture, 0 );
+			_gl.framebufferTexture2D( 36160, attachment, textureTarget, properties.get( texture ).__webglTexture, 0 );
 			_gl.bindFramebuffer( 36160, null );
 
 		}
@@ -22421,6 +22508,7 @@
 			info.memory.textures ++;
 
 			var isCube = ( renderTarget.isWebGLCubeRenderTarget === true );
+			var isMultiRenderTarget = ( renderTarget.isWebGLMultiRenderTarget === true );
 			var isMultisample = ( renderTarget.isWebGLMultisampleRenderTarget === true );
 			var supportsMips = isPowerOfTwo( renderTarget ) || isWebGL2;
 
@@ -22450,7 +22538,31 @@
 
 				renderTargetProperties.__webglFramebuffer = _gl.createFramebuffer();
 
-				if ( isMultisample ) {
+				if ( isMultiRenderTarget ) {
+
+					if ( capabilities.multiRenderTarget ) {
+
+						for ( var i$1 = 0, il = renderTarget.textures.length; i$1 < il; i$1 ++ ) {
+
+							var attachmentProperties = properties.get( renderTarget.textures[ i$1 ] );
+
+							if ( attachmentProperties.__webglTexture === undefined ) {
+
+								attachmentProperties.__webglTexture = _gl.createTexture();
+
+								info.memory.textures ++;
+
+							}
+
+						}
+
+					} else {
+
+						console.warn( 'THREE.WebGLRenderer: WebGLMultiRenderTarget can only be used with WebGL2 or WEBGL_draw_buffers extension.' );
+
+					}
+
+				} else if ( isMultisample ) {
 
 					if ( isWebGL2 ) {
 
@@ -22496,9 +22608,9 @@
 				state.bindTexture( 34067, textureProperties.__webglTexture );
 				setTextureParameters( 34067, renderTarget.texture, supportsMips );
 
-				for ( var i$1 = 0; i$1 < 6; i$1 ++ ) {
+				for ( var i$2 = 0; i$2 < 6; i$2 ++ ) {
 
-					setupFrameBufferTexture( renderTargetProperties.__webglFramebuffer[ i$1 ], renderTarget, 36064, 34069 + i$1 );
+					setupFrameBufferTexture( renderTargetProperties.__webglFramebuffer[ i$2 ], renderTarget, renderTarget.texture, 36064, 34069 + i$2 );
 
 				}
 
@@ -22510,11 +22622,34 @@
 
 				state.bindTexture( 34067, null );
 
+			} else if ( isMultiRenderTarget ) {
+
+				var textures = renderTarget.textures;
+
+				for ( var i$3 = 0, il$1 = textures.length; i$3 < il$1; i$3 ++ ) {
+
+					var attachment = textures[ i$3 ];
+					var attachmentProperties$1 = properties.get( attachment );
+
+					state.bindTexture( 3553, attachmentProperties$1.__webglTexture );
+					setTextureParameters( 3553, attachment, supportsMips );
+					setupFrameBufferTexture( renderTargetProperties.__webglFramebuffer, renderTarget, attachment, 36064 + i$3, 3553 );
+
+					if ( textureNeedsGenerateMipmaps( renderTarget.texture, supportsMips ) ) {
+
+						generateMipmap( 3553, attachment, renderTarget.width, renderTarget.height );
+
+					}
+
+				}
+
+				state.bindTexture( 3553, null );
+
 			} else {
 
 				state.bindTexture( 3553, textureProperties.__webglTexture );
 				setTextureParameters( 3553, renderTarget.texture, supportsMips );
-				setupFrameBufferTexture( renderTargetProperties.__webglFramebuffer, renderTarget, 36064, 3553 );
+				setupFrameBufferTexture( renderTargetProperties.__webglFramebuffer, renderTarget, renderTarget.texture, 36064, 3553 );
 
 				if ( textureNeedsGenerateMipmaps( renderTarget.texture, supportsMips ) ) {
 
@@ -24321,6 +24456,10 @@
 		var _scissor = new Vector4( 0, 0, _width, _height );
 		var _scissorTest = false;
 
+		//
+
+		var	_currentDrawBuffers = [];
+
 		// frustum
 
 		var _frustum = new Frustum();
@@ -24435,6 +24574,8 @@
 			state = new WebGLState( _gl, extensions, capabilities );
 			state.scissor( _currentScissor.copy( _scissor ).multiplyScalar( _pixelRatio ).floor() );
 			state.viewport( _currentViewport.copy( _viewport ).multiplyScalar( _pixelRatio ).floor() );
+
+			_currentDrawBuffers[ 0 ] = 1029;
 
 			info = new WebGLInfo( _gl );
 			properties = new WebGLProperties();
@@ -26158,6 +26299,63 @@
 
 				_gl.bindFramebuffer( 36160, framebuffer );
 				_currentFramebuffer = framebuffer;
+
+				if ( capabilities.multiRenderTarget ) {
+
+					var needsUpdate = false;
+
+					if ( renderTarget && renderTarget.isWebGLMultiRenderTarget ) {
+
+						if ( _currentDrawBuffers.length !== renderTarget.textures.length || _currentDrawBuffers[ 0 ] !== 36064 ) {
+
+							for ( var i = 0, il = renderTarget.textures.length; i < il; i ++ ) {
+
+								_currentDrawBuffers[ i ] = 36064 + i;
+
+							}
+
+							_currentDrawBuffers.length = renderTarget.textures.length;
+							needsUpdate = true;
+
+						}
+
+					} else if ( renderTarget ) {
+
+						if ( _currentDrawBuffers.length !== 1 || _currentDrawBuffers[ 0 ] !== 36064 ) {
+
+							_currentDrawBuffers[ 0 ] = 36064;
+							_currentDrawBuffers.length = 1;
+							needsUpdate = true;
+
+						}
+
+					} else {
+
+						if ( _currentDrawBuffers.length !== 1 || _currentDrawBuffers[ 0 ] !== 1029 ) {
+
+							_currentDrawBuffers[ 0 ] = 1029;
+							_currentDrawBuffers.length = 1;
+							needsUpdate = true;
+
+						}
+
+					}
+
+					if ( needsUpdate ) {
+
+						if ( capabilities.isWebGL2 ) {
+
+							_gl.drawBuffers( _currentDrawBuffers );
+
+						} else {
+
+							extensions.get( 'WEBGL_draw_buffers' ).drawBuffersWEBGL( _currentDrawBuffers );
+
+						}
+
+					}
+
+				}
 
 			}
 
@@ -51424,7 +51622,6 @@
 	exports.Uint8BufferAttribute = Uint8BufferAttribute;
 	exports.Uint8ClampedAttribute = Uint8ClampedAttribute;
 	exports.Uint8ClampedBufferAttribute = Uint8ClampedBufferAttribute;
-	exports.Uncharted2ToneMapping = Uncharted2ToneMapping;
 	exports.Uniform = Uniform;
 	exports.UniformsLib = UniformsLib;
 	exports.UniformsUtils = UniformsUtils;
@@ -51444,6 +51641,7 @@
 	exports.VertexColors = VertexColors;
 	exports.VideoTexture = VideoTexture;
 	exports.WebGLCubeRenderTarget = WebGLCubeRenderTarget;
+	exports.WebGLMultiRenderTarget = WebGLMultiRenderTarget;
 	exports.WebGLMultisampleRenderTarget = WebGLMultisampleRenderTarget;
 	exports.WebGLRenderTarget = WebGLRenderTarget;
 	exports.WebGLRenderTargetCube = WebGLRenderTargetCube;
