@@ -1,6 +1,8 @@
 {
   "name": "@palashbansal96/three",
-  "publishConfig": { "registry": "https://npm.pkg.github.com/" },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
   "version": "0.118.4",
   "description": "JavaScript 3D library",
   "main": "build/three.js",

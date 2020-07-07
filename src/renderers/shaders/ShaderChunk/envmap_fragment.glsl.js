@@ -4,7 +4,7 @@ export default /* glsl */`
 	#ifdef ENV_WORLDPOS
 
 		vec3 cameraToFrag;
-		
+
 		if ( isOrthographic ) {
 
 			cameraToFrag = normalize( vec3( - viewMatrix[ 0 ][ 2 ], - viewMatrix[ 1 ][ 2 ], - viewMatrix[ 2 ][ 2 ] ) );
@@ -33,6 +33,8 @@ export default /* glsl */`
 		vec3 reflectVec = vReflect;
 
 	#endif
+
+	reflectVec = transformDirection1(reflectVec, rotationMatrix(vec3(0,1,0), envMapRotation));
 
 	#ifdef ENVMAP_TYPE_CUBE
 

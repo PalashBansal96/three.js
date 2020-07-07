@@ -29,6 +29,9 @@
 
 			var params = {
 				exposure: 1.0,
+				contrast: 1.0,
+				saturation: 1.0,
+				rotation: 0.0,
 				toneMapping: 'ACESFilmic'
 			};
 
@@ -47,6 +50,8 @@
 
 			} );
 
+			var envMap = null;
+
 			async function init() {
 
 				renderer = new THREE.WebGLRenderer( { antialias: true } );
@@ -56,6 +61,8 @@
 
 				renderer.toneMapping = toneMappingOptions[ params.toneMapping ];
 				renderer.toneMappingExposure = params.exposure;
+				renderer.toneMappingContrast = params.contrast;
+				renderer.toneMappingSaturation = params.saturation;
 
 				renderer.outputEncoding = THREE.sRGBEncoding;
 
@@ -100,10 +107,11 @@
 
 				// environment
 
-				var envMap = pmremGenerator.fromEquirectangular( texture ).texture;
+				envMap = pmremGenerator.fromEquirectangular( texture ).texture;
 
 				scene.background = envMap;
 				scene.environment = envMap;
+				scene.envMapRotation = params.rotation;
 
 				texture.dispose();
 				pmremGenerator.dispose();
@@ -156,13 +164,32 @@
 
 				if ( params.toneMapping !== 'None' ) {
 
-					guiExposure = gui.add( params, 'exposure', 0, 2 )
-
+					guiExposure = gui.addFolder("Settings");
+					guiExposure.add( params, 'exposure', 0, 2 )
 						.onChange( function () {
-
 							renderer.toneMappingExposure = params.exposure;
 							render();
+						} );
 
+					guiExposure.add( params, 'contrast', 0, 2 )
+						.onChange( function () {
+							renderer.toneMappingContrast = params.contrast;
+							render();
+						} );
+
+					guiExposure.add( params, 'saturation', 0, 2 )
+						.onChange( function () {
+							renderer.toneMappingSaturation = params.saturation;
+							render();
+						} );
+
+					guiExposure.add( params, 'rotation', 0, 10 )
+						.onChange( function () {
+							scene.envMapRotation = params.rotation;
+							envMap.rotation = params.rotation;
+							// scene.environment = null;
+							// scene.environment = envMap;
+							render();
 						} );
 
 				}
