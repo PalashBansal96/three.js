@@ -109,6 +109,8 @@ function WebGLRenderer( parameters ) {
 
 	this.toneMapping = NoToneMapping;
 	this.toneMappingExposure = 1.0;
+	this.toneMappingContrast = 1.0;
+	this.toneMappingSaturation = 1.0;
 
 	// morphs
 
@@ -1674,6 +1676,8 @@ function WebGLRenderer( parameters ) {
 		if ( refreshMaterial ) {
 
 			p_uniforms.setValue( _gl, 'toneMappingExposure', _this.toneMappingExposure );
+			p_uniforms.setValue( _gl, 'toneMappingContrast', _this.toneMappingContrast );
+			p_uniforms.setValue( _gl, 'toneMappingSaturation', _this.toneMappingSaturation );
 
 			if ( materialProperties.needsLights ) {
 

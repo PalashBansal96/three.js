@@ -15065,7 +15065,7 @@
 
 	var tonemapping_fragment = "#if defined( TONE_MAPPING )\n\tgl_FragColor.rgb = toneMapping( gl_FragColor.rgb );\n#endif";
 
-	var tonemapping_pars_fragment = "#ifndef saturate\n#define saturate(a) clamp( a, 0.0, 1.0 )\n#endif\nuniform float toneMappingExposure;\nvec3 LinearToneMapping( vec3 color ) {\n\treturn toneMappingExposure * color;\n}\nvec3 ReinhardToneMapping( vec3 color ) {\n\tcolor *= toneMappingExposure;\n\treturn saturate( color / ( vec3( 1.0 ) + color ) );\n}\nvec3 OptimizedCineonToneMapping( vec3 color ) {\n\tcolor *= toneMappingExposure;\n\tcolor = max( vec3( 0.0 ), color - 0.004 );\n\treturn pow( ( color * ( 6.2 * color + 0.5 ) ) / ( color * ( 6.2 * color + 1.7 ) + 0.06 ), vec3( 2.2 ) );\n}\nvec3 RRTAndODTFit( vec3 v ) {\n\tvec3 a = v * ( v + 0.0245786 ) - 0.000090537;\n\tvec3 b = v * ( 0.983729 * v + 0.4329510 ) + 0.238081;\n\treturn a / b;\n}\nvec3 ACESFilmicToneMapping( vec3 color ) {\n\tconst mat3 ACESInputMat = mat3(\n\t\tvec3( 0.59719, 0.07600, 0.02840 ),\t\tvec3( 0.35458, 0.90834, 0.13383 ),\n\t\tvec3( 0.04823, 0.01566, 0.83777 )\n\t);\n\tconst mat3 ACESOutputMat = mat3(\n\t\tvec3(  1.60475, -0.10208, -0.00327 ),\t\tvec3( -0.53108,  1.10813, -0.07276 ),\n\t\tvec3( -0.07367, -0.00605,  1.07602 )\n\t);\n\tcolor *= toneMappingExposure / 0.6;\n\tcolor = ACESInputMat * color;\n\tcolor = RRTAndODTFit( color );\n\tcolor = ACESOutputMat * color;\n\treturn saturate( color );\n}\nvec3 CustomToneMapping( vec3 color ) { return color; }";
+	var tonemapping_pars_fragment = "#ifndef saturate\n#define saturate(a) clamp( a, 0.0, 1.0 )\n#endif\nvec3 saturation(vec3 rgb, float adjustment)\n{\n    const vec3 W = vec3(0.2125, 0.7154, 0.0721);\n    vec3 intensity = vec3(dot(rgb, W));\n    return mix(intensity, rgb, adjustment);\n}\nuniform float toneMappingExposure;\nuniform float toneMappingContrast;\nuniform float toneMappingSaturation;\nmat3 saturationMatrix( float saturation )\n{\n    vec3 luminance = vec3( 0.3086, 0.6094, 0.0820 );\n    float oneMinusSat = 1.0 - saturation;\n    vec3 red = vec3( luminance.x * oneMinusSat );\n    red+= vec3( saturation, 0, 0 );\n    vec3 green = vec3( luminance.y * oneMinusSat );\n    green += vec3( 0, saturation, 0 );\n    vec3 blue = vec3( luminance.z * oneMinusSat );\n    blue += vec3( 0, 0, saturation );\n    return mat3( red, green, blue);\n}\nvec3 LinearToneMapping( vec3 color ) {\n\treturn saturation((toneMappingExposure * color - vec3(0.5)) * toneMappingContrast + vec3(0.5), toneMappingSaturation);\n}\nvec3 ReinhardToneMapping( vec3 color ) {\n\tcolor = LinearToneMapping( color );\n\treturn saturate( color / ( vec3( 1.0 ) + color ) );\n}\nvec3 OptimizedCineonToneMapping( vec3 color ) {\n\tcolor = LinearToneMapping( color );\n\tcolor = max( vec3( 0.0 ), color - 0.004 );\n\treturn pow( ( color * ( 6.2 * color + 0.5 ) ) / ( color * ( 6.2 * color + 1.7 ) + 0.06 ), vec3( 2.2 ) );\n}\nvec3 RRTAndODTFit( vec3 v ) {\n\tvec3 a = v * ( v + 0.0245786 ) - 0.000090537;\n\tvec3 b = v * ( 0.983729 * v + 0.4329510 ) + 0.238081;\n\treturn a / b;\n}\nvec3 ACESFilmicToneMapping( vec3 color ) {\n\tconst mat3 ACESInputMat = mat3(\n\t\tvec3( 0.59719, 0.07600, 0.02840 ),\t\tvec3( 0.35458, 0.90834, 0.13383 ),\n\t\tvec3( 0.04823, 0.01566, 0.83777 )\n\t);\n\tconst mat3 ACESOutputMat = mat3(\n\t\tvec3(  1.60475, -0.10208, -0.00327 ),\t\tvec3( -0.53108,  1.10813, -0.07276 ),\n\t\tvec3( -0.07367, -0.00605,  1.07602 )\n\t);\n\tcolor = LinearToneMapping( color ) / 0.6;\n\tcolor = ACESInputMat * color;\n\tcolor = RRTAndODTFit( color );\n\tcolor = ACESOutputMat * color;\n\treturn saturate( color );\n}\nvec3 CustomToneMapping( vec3 color ) { return color; }";
 
 	var uv_pars_fragment = "#if ( defined( USE_UV ) && ! defined( UVS_VERTEX_ONLY ) )\n\tvarying vec2 vUv;\n#endif";
 
@@ -24248,7 +24248,6 @@
 			if ( envMap ) {
 
 				uniforms.envMap.value = envMap;
-				console.log(envMap);
 				uniforms.envMapRotation.value = envMap.rotation;
 
 				uniforms.flipEnvMap.value = envMap.isCubeTexture ? - 1 : 1;
@@ -24839,6 +24838,8 @@
 
 		this.toneMapping = NoToneMapping;
 		this.toneMappingExposure = 1.0;
+		this.toneMappingContrast = 1.0;
+		this.toneMappingSaturation = 1.0;
 
 		// morphs
 
@@ -26404,6 +26405,8 @@
 			if ( refreshMaterial ) {
 
 				p_uniforms.setValue( _gl, 'toneMappingExposure', _this.toneMappingExposure );
+				p_uniforms.setValue( _gl, 'toneMappingContrast', _this.toneMappingContrast );
+				p_uniforms.setValue( _gl, 'toneMappingSaturation', _this.toneMappingSaturation );
 
 				if ( materialProperties.needsLights ) {
 
