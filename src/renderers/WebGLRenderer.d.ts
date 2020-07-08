@@ -164,6 +164,8 @@ export class WebGLRenderer implements Renderer {
 	toneMapping: ToneMapping;
 	toneMappingExposure: number;
 	toneMappingWhitePoint: number;
+	toneMappingContrast: number;
+	toneMappingSaturation: number;
 
 	/**
 	 * Default is false.

@@ -16,6 +16,7 @@ export let UniformsLib: {
 	};
 	envmap: {
 		envMap: IUniform;
+		envMapRotation: IUniform;
 		flipEnvMap: IUniform;
 		reflectivity: IUniform;
 		refractionRatio: IUniform;

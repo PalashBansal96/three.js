@@ -1,13 +1,16 @@
 {
-  "name": "three",
-  "version": "0.117.0",
+  "name": "@palashbansal96/three",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "version": "0.117.2",
   "description": "JavaScript 3D library",
   "main": "build/three.js",
   "module": "build/three.module.js",
   "types": "src/Three.d.ts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mrdoob/three.js"
+    "url": "https://github.com/PalashBansal96/three.js"
   },
   "files": [
     "build/three.js",

@@ -23,6 +23,8 @@ var Config = function () {
 		'project/renderer/toneMapping': 0, // NoToneMapping
 		'project/renderer/toneMappingExposure': 1,
 		'project/renderer/toneMappingWhitePoint': 1,
+		'project/renderer/toneMappingContrast': 1,
+		'project/renderer/toneMappingSaturation': 1,
 
 		'settings/history': false,
 
