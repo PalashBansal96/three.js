@@ -20,19 +20,23 @@ uniform float toneMappingWhitePoint;
 uniform float toneMappingContrast;
 uniform float toneMappingSaturation;
 
+vec3 ApplyContrastSaturation(vec3 color){
+	return saturation((color - vec3(0.5)) * toneMappingContrast + vec3(0.5), toneMappingSaturation);
+}
+
 // exposure, contrast, saturation only
 vec3 LinearToneMapping( vec3 color ) {
 
-	return saturation((toneMappingExposure * color - vec3(0.5)) * toneMappingContrast + vec3(0.5), toneMappingSaturation);
+	return toneMappingExposure * ApplyContrastSaturation(color);
 
 }
 
 // source: https://www.cs.utah.edu/~reinhard/cdrom/
 vec3 ReinhardToneMapping( vec3 color ) {
 
-	color = LinearToneMapping( color );
-	return saturate( color / ( vec3( 1.0 ) + color ) );
-
+	color *= toneMappingExposure;
+	color = saturate( color / ( vec3( 1.0 ) + color ) );
+	return color * ApplyContrastSaturation(color);
 }
 
 // source: http://filmicgames.com/archives/75
@@ -40,8 +44,9 @@ vec3 ReinhardToneMapping( vec3 color ) {
 vec3 Uncharted2ToneMapping( vec3 color ) {
 
 	// John Hable's filmic operator from Uncharted 2 video game
-	color = LinearToneMapping( color );
-	return saturate( Uncharted2Helper( color ) / Uncharted2Helper( vec3( toneMappingWhitePoint ) ) );
+	color *= toneMappingExposure;
+	color = saturate( Uncharted2Helper( color ) / Uncharted2Helper( vec3( toneMappingWhitePoint ) ) );
+	return color * ApplyContrastSaturation(color);
 
 }
 
@@ -49,17 +54,19 @@ vec3 Uncharted2ToneMapping( vec3 color ) {
 vec3 OptimizedCineonToneMapping( vec3 color ) {
 
 	// optimized filmic operator by Jim Hejl and Richard Burgess-Dawson
-	color = LinearToneMapping( color );
+	color *= toneMappingExposure;
 	color = max( vec3( 0.0 ), color - 0.004 );
-	return pow( ( color * ( 6.2 * color + 0.5 ) ) / ( color * ( 6.2 * color + 1.7 ) + 0.06 ), vec3( 2.2 ) );
+	color = pow( ( color * ( 6.2 * color + 0.5 ) ) / ( color * ( 6.2 * color + 1.7 ) + 0.06 ), vec3( 2.2 ) );
+	return color * ApplyContrastSaturation(color);
 
 }
 
 // source: https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
 vec3 ACESFilmicToneMapping( vec3 color ) {
 
-	color = LinearToneMapping( color );
-	return saturate( ( color * ( 2.51 * color + 0.03 ) ) / ( color * ( 2.43 * color + 0.59 ) + 0.14 ) );
+	color *= toneMappingExposure;
+	color = saturate( ( color * ( 2.51 * color + 0.03 ) ) / ( color * ( 2.43 * color + 0.59 ) + 0.14 ) );
+	return color * ApplyContrastSaturation(color);
 
 }
 `;
