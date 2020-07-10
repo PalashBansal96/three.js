@@ -3,7 +3,7 @@
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },
-  "version": "0.117.21",
+  "version": "0.117.22",
   "description": "JavaScript 3D library",
   "main": "build/three.js",
   "module": "build/three.module.js",

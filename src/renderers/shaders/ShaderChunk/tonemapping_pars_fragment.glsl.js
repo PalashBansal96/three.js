@@ -36,7 +36,7 @@ vec3 ReinhardToneMapping( vec3 color ) {
 
 	color *= toneMappingExposure;
 	color = saturate( color / ( vec3( 1.0 ) + color ) );
-	return color * ApplyContrastSaturation(color);
+	return ApplyContrastSaturation(color);
 }
 
 // source: http://filmicgames.com/archives/75
@@ -46,7 +46,7 @@ vec3 Uncharted2ToneMapping( vec3 color ) {
 	// John Hable's filmic operator from Uncharted 2 video game
 	color *= toneMappingExposure;
 	color = saturate( Uncharted2Helper( color ) / Uncharted2Helper( vec3( toneMappingWhitePoint ) ) );
-	return color * ApplyContrastSaturation(color);
+	return ApplyContrastSaturation(color);
 
 }
 
@@ -57,7 +57,7 @@ vec3 OptimizedCineonToneMapping( vec3 color ) {
 	color *= toneMappingExposure;
 	color = max( vec3( 0.0 ), color - 0.004 );
 	color = pow( ( color * ( 6.2 * color + 0.5 ) ) / ( color * ( 6.2 * color + 1.7 ) + 0.06 ), vec3( 2.2 ) );
-	return color * ApplyContrastSaturation(color);
+	return ApplyContrastSaturation(color);
 
 }
 
@@ -66,7 +66,7 @@ vec3 ACESFilmicToneMapping( vec3 color ) {
 
 	color *= toneMappingExposure;
 	color = saturate( ( color * ( 2.51 * color + 0.03 ) ) / ( color * ( 2.43 * color + 0.59 ) + 0.14 ) );
-	return color * ApplyContrastSaturation(color);
+	return ApplyContrastSaturation(color);
 
 }
 `;
