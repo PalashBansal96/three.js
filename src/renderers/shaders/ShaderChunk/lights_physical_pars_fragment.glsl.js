@@ -17,6 +17,7 @@ struct PhysicalMaterial {
 
 uniform sampler2D normalMapBuffer;
 uniform bool useNormalMapBuffer;
+uniform vec2 bufferSize;
 
 #define MAXIMUM_SPECULAR_COEFFICIENT 0.16
 #define DEFAULT_SPECULAR_COEFFICIENT 0.04
