@@ -26019,7 +26019,7 @@
 				p_uniforms.setValue( _gl, 'toneMappingWhitePoint', _this.toneMappingWhitePoint );
 				p_uniforms.setValue( _gl, 'toneMappingContrast', _this.toneMappingContrast );
 				p_uniforms.setValue( _gl, 'toneMappingSaturation', _this.toneMappingSaturation );
-				p_uniforms.setValue( _gl, 'normalMapBuffer', _this.normalMapBuffer );
+				p_uniforms.setValue( _gl, 'normalMapBuffer', _this.normalMapBuffer, textures );
 				p_uniforms.setValue( _gl, 'useNormalMapBuffer', _this.useNormalMapBuffer );
 
 				var _size = new Vector2();
