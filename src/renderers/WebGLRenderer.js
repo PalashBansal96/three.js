@@ -1855,7 +1855,7 @@ function WebGLRenderer( parameters ) {
 			p_uniforms.setValue( _gl, 'useNormalMapBuffer', _this.useNormalMapBuffer );
 
 			let _size = new Vector2();
-			_this.getDrawingBufferSize(size_);
+			_this.getDrawingBufferSize(_size);
 			p_uniforms.setValue( _gl, 'bufferSize', _size );
 
 			if ( materialProperties.needsLights ) {
