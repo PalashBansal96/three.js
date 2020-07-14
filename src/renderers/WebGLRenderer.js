@@ -100,7 +100,8 @@ function WebGLRenderer( parameters ) {
 
 	this.gammaFactor = 2.0;	// for backwards compatibility
 	this.outputEncoding = LinearEncoding;
-
+	this.normalMapBuffer = null;
+	this.useNormalMapBuffer = false;
 	// physical lights
 
 	this.physicallyCorrectLights = false;
@@ -1850,6 +1851,12 @@ function WebGLRenderer( parameters ) {
 			p_uniforms.setValue( _gl, 'toneMappingWhitePoint', _this.toneMappingWhitePoint );
 			p_uniforms.setValue( _gl, 'toneMappingContrast', _this.toneMappingContrast );
 			p_uniforms.setValue( _gl, 'toneMappingSaturation', _this.toneMappingSaturation );
+			p_uniforms.setValue( _gl, 'normalMapBuffer', _this.normalMapBuffer );
+			p_uniforms.setValue( _gl, 'useNormalMapBuffer', _this.useNormalMapBuffer );
+
+			let _size = new Vector2();
+			_this.getDrawingBufferSize(size_);
+			p_uniforms.setValue( _gl, 'bufferSize', _size );
 
 			if ( materialProperties.needsLights ) {
 

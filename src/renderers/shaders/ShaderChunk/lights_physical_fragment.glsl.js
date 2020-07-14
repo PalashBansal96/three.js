@@ -5,6 +5,11 @@ material.diffuseColor = diffuseColor.rgb * ( 1.0 - metalnessFactor );
 vec3 dxy = max( abs( dFdx( geometryNormal ) ), abs( dFdy( geometryNormal ) ) );
 float geometryRoughness = max( max( dxy.x, dxy.y ), dxy.z );
 
+if(useNormalMapBuffer) {
+	vec2 uv_ = gl_FragCoord.xy/bufferSize;
+	normal = 2. * texture2D(normalMapBuffer, uv_).rgb - 1.;
+}
+
 material.specularRoughness = max( roughnessFactor, 0.0525 );// 0.0525 corresponds to the base mip of a 256 cubemap.
 material.specularRoughness += geometryRoughness;
 material.specularRoughness = min( material.specularRoughness, 1.0 );
