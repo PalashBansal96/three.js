@@ -1,4 +1,4 @@
-import { BufferAttribute } from './../core/BufferAttribute';
+// import { BufferAttribute } from './../core/BufferAttribute';
 
 export interface HSL {
 	h: number;
@@ -189,7 +189,8 @@ export class Color {
 	 */
 	toArray( xyz: ArrayLike<number>, offset?: number ): ArrayLike<number>;
 
-	fromBufferAttribute( attribute: BufferAttribute, index: number ): this;
+	// fromBufferAttribute( attribute: BufferAttribute, index: number ): this;
+	fromBufferAttribute( attribute: any, index: number ): this; //#added vector lib
 
 	/**
 	 * List of X11 color names.

@@ -1,5 +1,5 @@
 import { Matrix3 } from './Matrix3';
-import { BufferAttribute } from './../core/BufferAttribute';
+// import { BufferAttribute } from './../core/BufferAttribute';
 
 /**
  * ( interface Vector<T> )
@@ -441,7 +441,8 @@ export class Vector2 implements Vector {
 	 * @param attribute the source attribute.
 	 * @param index index in the attribute.
 	 */
-	fromBufferAttribute( attribute: BufferAttribute, index: number ): this;
+	fromBufferAttribute( attribute: any, index: number ): this; //#added vector lib
+	// fromBufferAttribute( attribute: BufferAttribute, index: number ): this;
 
 	/**
 	 * Rotates the vector around center by angle radians.

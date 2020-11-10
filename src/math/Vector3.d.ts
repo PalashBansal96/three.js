@@ -2,11 +2,11 @@ import { Euler } from './Euler';
 import { Matrix3 } from './Matrix3';
 import { Matrix4 } from './Matrix4';
 import { Quaternion } from './Quaternion';
-import { Camera } from './../cameras/Camera';
+// import { Camera } from './../cameras/Camera';
 import { Spherical } from './Spherical';
 import { Cylindrical } from './Cylindrical';
-import { BufferAttribute } from './../core/BufferAttribute';
-import { InterleavedBufferAttribute } from './../core/InterleavedBufferAttribute';
+// import { BufferAttribute } from './../core/BufferAttribute';
+// import { InterleavedBufferAttribute } from './../core/InterleavedBufferAttribute';
 import { Vector } from './Vector2';
 /**
  * 3D vector.
@@ -127,9 +127,13 @@ export class Vector3 implements Vector {
 
 	applyQuaternion( q: Quaternion ): this;
 
-	project( camera: Camera ): this;
+	// project( camera: Camera ): this;
+	//
+	// unproject( camera: Camera ): this;
 
-	unproject( camera: Camera ): this;
+	project( camera: any ): this;  //#added vector lib
+
+	unproject( camera: any ): this;  //#added vector lib
 
 	transformDirection( m: Matrix4 ): this;
 
@@ -293,10 +297,15 @@ export class Vector3 implements Vector {
 	 */
 	toArray( array: ArrayLike<number>, offset?: number ): ArrayLike<number>;
 
+	// fromBufferAttribute(
+	// 	attribute: BufferAttribute | InterleavedBufferAttribute,
+	// 	index: number
+	// ): this;
+
 	fromBufferAttribute(
-		attribute: BufferAttribute | InterleavedBufferAttribute,
+		attribute: any,
 		index: number
-	): this;
+	): this; //#added vector lib
 
 	/**
 	 * Sets this vector's x, y and z from Math.random
