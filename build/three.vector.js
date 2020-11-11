@@ -135,6 +135,131 @@
 		}
 	};
 
+	/**
+	 * Ref: https://en.wikipedia.org/wiki/Spherical_coordinate_system
+	 *
+	 * The polar angle (phi) is measured from the positive y-axis. The positive y-axis is up.
+	 * The azimuthal angle (theta) is measured from the positive z-axis.
+	 */
+
+	var Spherical = /*#__PURE__*/function () {
+		function Spherical(radius, phi, theta) {
+			if (radius === void 0) {
+				radius = 1;
+			}
+
+			if (phi === void 0) {
+				phi = 0;
+			}
+
+			if (theta === void 0) {
+				theta = 0;
+			}
+
+			this.radius = radius;
+			this.phi = phi; // polar angle
+
+			this.theta = theta; // azimuthal angle
+
+			return this;
+		}
+
+		var _proto = Spherical.prototype;
+
+		_proto.set = function set(radius, phi, theta) {
+			this.radius = radius;
+			this.phi = phi;
+			this.theta = theta;
+			return this;
+		};
+
+		_proto.clone = function clone() {
+			return new this.constructor().copy(this);
+		};
+
+		_proto.copy = function copy(other) {
+			this.radius = other.radius;
+			this.phi = other.phi;
+			this.theta = other.theta;
+			return this;
+		} // restrict phi to be betwee EPS and PI-EPS
+		;
+
+		_proto.makeSafe = function makeSafe() {
+			var EPS = 0.000001;
+			this.phi = Math.max(EPS, Math.min(Math.PI - EPS, this.phi));
+			return this;
+		};
+
+		_proto.setFromVector3 = function setFromVector3(v) {
+			return this.setFromCartesianCoords(v.x, v.y, v.z);
+		};
+
+		_proto.setFromCartesianCoords = function setFromCartesianCoords(x, y, z) {
+			this.radius = Math.sqrt(x * x + y * y + z * z);
+
+			if (this.radius === 0) {
+				this.theta = 0;
+				this.phi = 0;
+			} else {
+				this.theta = Math.atan2(x, z);
+				this.phi = Math.acos(MathUtils.clamp(y / this.radius, -1, 1));
+			}
+
+			return this;
+		};
+
+		return Spherical;
+	}();
+
+	/**
+	 * Ref: https://en.wikipedia.org/wiki/Cylindrical_coordinate_system
+	 */
+	var Cylindrical = /*#__PURE__*/function () {
+		function Cylindrical(radius, theta, y) {
+			this.radius = radius !== undefined ? radius : 1.0; // distance from the origin to a point in the x-z plane
+
+			this.theta = theta !== undefined ? theta : 0; // counterclockwise angle in the x-z plane measured in radians from the positive z-axis
+
+			this.y = y !== undefined ? y : 0; // height above the x-z plane
+
+			return this;
+		}
+
+		var _proto = Cylindrical.prototype;
+
+		_proto.set = function set(radius, theta, y) {
+			this.radius = radius;
+			this.theta = theta;
+			this.y = y;
+			return this;
+		};
+
+		_proto.clone = function clone() {
+			return new this.constructor().copy(this);
+		};
+
+		_proto.copy = function copy(other) {
+			this.radius = other.radius;
+			this.theta = other.theta;
+			this.y = other.y;
+			return this;
+		};
+
+		_proto.setFromVector3 = function setFromVector3(v) {
+			return this.setFromCartesianCoords(v.x, v.y, v.z);
+		};
+
+		_proto.setFromCartesianCoords = function setFromCartesianCoords(x, y, z) {
+			this.radius = Math.sqrt(x * x + z * z);
+			this.theta = Math.atan2(x, z);
+			this.y = y;
+			return this;
+		};
+
+		return Cylindrical;
+	}();
+
 	function _defineProperties(target, props) {
 		for (var i = 0; i < props.length; i++) {
 			var descriptor = props[i];
@@ -150,356 +275,6 @@
 		if (staticProps) _defineProperties(Constructor, staticProps);
 		return Constructor;
 	}
-
-	var Vector2 = /*#__PURE__*/function () {
-		function Vector2(x, y) {
-			if (x === void 0) {
-				x = 0;
-			}
-
-			if (y === void 0) {
-				y = 0;
-			}
-
-			Object.defineProperty(this, 'isVector2', {
-				value: true
-			});
-			this.x = x;
-			this.y = y;
-		}
-
-		var _proto = Vector2.prototype;
-
-		_proto.set = function set(x, y) {
-			this.x = x;
-			this.y = y;
-			return this;
-		};
-
-		_proto.setScalar = function setScalar(scalar) {
-			this.x = scalar;
-			this.y = scalar;
-			return this;
-		};
-
-		_proto.setX = function setX(x) {
-			this.x = x;
-			return this;
-		};
-
-		_proto.setY = function setY(y) {
-			this.y = y;
-			return this;
-		};
-
-		_proto.setComponent = function setComponent(index, value) {
-			switch (index) {
-				case 0:
-					this.x = value;
-					break;
-
-				case 1:
-					this.y = value;
-					break;
-
-				default:
-					throw new Error('index is out of range: ' + index);
-			}
-
-			return this;
-		};
-
-		_proto.getComponent = function getComponent(index) {
-			switch (index) {
-				case 0:
-					return this.x;
-
-				case 1:
-					return this.y;
-
-				default:
-					throw new Error('index is out of range: ' + index);
-			}
-		};
-
-		_proto.clone = function clone() {
-			return new this.constructor(this.x, this.y);
-		};
-
-		_proto.copy = function copy(v) {
-			this.x = v.x;
-			this.y = v.y;
-			return this;
-		};
-
-		_proto.add = function add(v, w) {
-			if (w !== undefined) {
-				console.warn('THREE.Vector2: .add() now only accepts one argument. Use .addVectors( a, b ) instead.');
-				return this.addVectors(v, w);
-			}
-
-			this.x += v.x;
-			this.y += v.y;
-			return this;
-		};
-
-		_proto.addScalar = function addScalar(s) {
-			this.x += s;
-			this.y += s;
-			return this;
-		};
-
-		_proto.addVectors = function addVectors(a, b) {
-			this.x = a.x + b.x;
-			this.y = a.y + b.y;
-			return this;
-		};
-
-		_proto.addScaledVector = function addScaledVector(v, s) {
-			this.x += v.x * s;
-			this.y += v.y * s;
-			return this;
-		};
-
-		_proto.sub = function sub(v, w) {
-			if (w !== undefined) {
-				console.warn('THREE.Vector2: .sub() now only accepts one argument. Use .subVectors( a, b ) instead.');
-				return this.subVectors(v, w);
-			}
-
-			this.x -= v.x;
-			this.y -= v.y;
-			return this;
-		};
-
-		_proto.subScalar = function subScalar(s) {
-			this.x -= s;
-			this.y -= s;
-			return this;
-		};
-
-		_proto.subVectors = function subVectors(a, b) {
-			this.x = a.x - b.x;
-			this.y = a.y - b.y;
-			return this;
-		};
-
-		_proto.multiply = function multiply(v) {
-			this.x *= v.x;
-			this.y *= v.y;
-			return this;
-		};
-
-		_proto.multiplyScalar = function multiplyScalar(scalar) {
-			this.x *= scalar;
-			this.y *= scalar;
-			return this;
-		};
-
-		_proto.divide = function divide(v) {
-			this.x /= v.x;
-			this.y /= v.y;
-			return this;
-		};
-
-		_proto.divideScalar = function divideScalar(scalar) {
-			return this.multiplyScalar(1 / scalar);
-		};
-
-		_proto.applyMatrix3 = function applyMatrix3(m) {
-			var x = this.x,
-					y = this.y;
-			var e = m.elements;
-			this.x = e[0] * x + e[3] * y + e[6];
-			this.y = e[1] * x + e[4] * y + e[7];
-			return this;
-		};
-
-		_proto.min = function min(v) {
-			this.x = Math.min(this.x, v.x);
-			this.y = Math.min(this.y, v.y);
-			return this;
-		};
-
-		_proto.max = function max(v) {
-			this.x = Math.max(this.x, v.x);
-			this.y = Math.max(this.y, v.y);
-			return this;
-		};
-
-		_proto.clamp = function clamp(min, max) {
-			// assumes min < max, componentwise
-			this.x = Math.max(min.x, Math.min(max.x, this.x));
-			this.y = Math.max(min.y, Math.min(max.y, this.y));
-			return this;
-		};
-
-		_proto.clampScalar = function clampScalar(minVal, maxVal) {
-			this.x = Math.max(minVal, Math.min(maxVal, this.x));
-			this.y = Math.max(minVal, Math.min(maxVal, this.y));
-			return this;
-		};
-
-		_proto.clampLength = function clampLength(min, max) {
-			var length = this.length();
-			return this.divideScalar(length || 1).multiplyScalar(Math.max(min, Math.min(max, length)));
-		};
-
-		_proto.floor = function floor() {
-			this.x = Math.floor(this.x);
-			this.y = Math.floor(this.y);
-			return this;
-		};
-
-		_proto.ceil = function ceil() {
-			this.x = Math.ceil(this.x);
-			this.y = Math.ceil(this.y);
-			return this;
-		};
-
-		_proto.round = function round() {
-			this.x = Math.round(this.x);
-			this.y = Math.round(this.y);
-			return this;
-		};
-
-		_proto.roundToZero = function roundToZero() {
-			this.x = this.x < 0 ? Math.ceil(this.x) : Math.floor(this.x);
-			this.y = this.y < 0 ? Math.ceil(this.y) : Math.floor(this.y);
-			return this;
-		};
-
-		_proto.negate = function negate() {
-			this.x = -this.x;
-			this.y = -this.y;
-			return this;
-		};
-
-		_proto.dot = function dot(v) {
-			return this.x * v.x + this.y * v.y;
-		};
-
-		_proto.cross = function cross(v) {
-			return this.x * v.y - this.y * v.x;
-		};
-
-		_proto.lengthSq = function lengthSq() {
-			return this.x * this.x + this.y * this.y;
-		};
-
-		_proto.length = function length() {
-			return Math.sqrt(this.x * this.x + this.y * this.y);
-		};
-
-		_proto.manhattanLength = function manhattanLength() {
-			return Math.abs(this.x) + Math.abs(this.y);
-		};
-
-		_proto.normalize = function normalize() {
-			return this.divideScalar(this.length() || 1);
-		};
-
-		_proto.angle = function angle() {
-			// computes the angle in radians with respect to the positive x-axis
-			var angle = Math.atan2(-this.y, -this.x) + Math.PI;
-			return angle;
-		};
-
-		_proto.distanceTo = function distanceTo(v) {
-			return Math.sqrt(this.distanceToSquared(v));
-		};
-
-		_proto.distanceToSquared = function distanceToSquared(v) {
-			var dx = this.x - v.x,
-					dy = this.y - v.y;
-			return dx * dx + dy * dy;
-		};
-
-		_proto.manhattanDistanceTo = function manhattanDistanceTo(v) {
-			return Math.abs(this.x - v.x) + Math.abs(this.y - v.y);
-		};
-
-		_proto.setLength = function setLength(length) {
-			return this.normalize().multiplyScalar(length);
-		};
-
-		_proto.lerp = function lerp(v, alpha) {
-			this.x += (v.x - this.x) * alpha;
-			this.y += (v.y - this.y) * alpha;
-			return this;
-		};
-
-		_proto.lerpVectors = function lerpVectors(v1, v2, alpha) {
-			this.x = v1.x + (v2.x - v1.x) * alpha;
-			this.y = v1.y + (v2.y - v1.y) * alpha;
-			return this;
-		};
-
-		_proto.equals = function equals(v) {
-			return v.x === this.x && v.y === this.y;
-		};
-
-		_proto.fromArray = function fromArray(array, offset) {
-			if (offset === undefined) offset = 0;
-			this.x = array[offset];
-			this.y = array[offset + 1];
-			return this;
-		};
-
-		_proto.toArray = function toArray(array, offset) {
-			if (array === undefined) array = [];
-			if (offset === undefined) offset = 0;
-			array[offset] = this.x;
-			array[offset + 1] = this.y;
-			return array;
-		};
-
-		_proto.fromBufferAttribute = function fromBufferAttribute(attribute, index, offset) {
-			if (offset !== undefined) {
-				console.warn('THREE.Vector2: offset has been removed from .fromBufferAttribute().');
-			}
-
-			this.x = attribute.getX(index);
-			this.y = attribute.getY(index);
-			return this;
-		};
-
-		_proto.rotateAround = function rotateAround(center, angle) {
-			var c = Math.cos(angle),
-					s = Math.sin(angle);
-			var x = this.x - center.x;
-			var y = this.y - center.y;
-			this.x = x * c - y * s + center.x;
-			this.y = x * s + y * c + center.y;
-			return this;
-		};
-
-		_proto.random = function random() {
-			this.x = Math.random();
-			this.y = Math.random();
-			return this;
-		};
-
-		_createClass(Vector2, [{
-			key: "width",
-			get: function get() {
-				return this.x;
-			},
-			set: function set(value) {
-				this.x = value;
-			}
-		}, {
-			key: "height",
-			get: function get() {
-				return this.y;
-			},
-			set: function set(value) {
-				this.y = value;
-			}
-		}]);
-
-		return Vector2;
-	}();
 
 	var Quaternion = /*#__PURE__*/function () {
 		function Quaternion(x, y, z, w) {
@@ -2330,6 +2105,1493 @@
 
 	var _z = /*@__PURE__*/new Vector3();
 
+	var Matrix3 = /*#__PURE__*/function () {
+		function Matrix3() {
+			Object.defineProperty(this, 'isMatrix3', {
+				value: true
+			});
+			this.elements = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+
+			if (arguments.length > 0) {
+				console.error('THREE.Matrix3: the constructor no longer reads arguments. use .set() instead.');
+			}
+		}
+
+		var _proto = Matrix3.prototype;
+
+		_proto.set = function set(n11, n12, n13, n21, n22, n23, n31, n32, n33) {
+			var te = this.elements;
+			te[0] = n11;
+			te[1] = n21;
+			te[2] = n31;
+			te[3] = n12;
+			te[4] = n22;
+			te[5] = n32;
+			te[6] = n13;
+			te[7] = n23;
+			te[8] = n33;
+			return this;
+		};
+
+		_proto.identity = function identity() {
+			this.set(1, 0, 0, 0, 1, 0, 0, 0, 1);
+			return this;
+		};
+
+		_proto.clone = function clone() {
+			return new this.constructor().fromArray(this.elements);
+		};
+
+		_proto.copy = function copy(m) {
+			var te = this.elements;
+			var me = m.elements;
+			te[0] = me[0];
+			te[1] = me[1];
+			te[2] = me[2];
+			te[3] = me[3];
+			te[4] = me[4];
+			te[5] = me[5];
+			te[6] = me[6];
+			te[7] = me[7];
+			te[8] = me[8];
+			return this;
+		};
+
+		_proto.extractBasis = function extractBasis(xAxis, yAxis, zAxis) {
+			xAxis.setFromMatrix3Column(this, 0);
+			yAxis.setFromMatrix3Column(this, 1);
+			zAxis.setFromMatrix3Column(this, 2);
+			return this;
+		};
+
+		_proto.setFromMatrix4 = function setFromMatrix4(m) {
+			var me = m.elements;
+			this.set(me[0], me[4], me[8], me[1], me[5], me[9], me[2], me[6], me[10]);
+			return this;
+		};
+
+		_proto.multiply = function multiply(m) {
+			return this.multiplyMatrices(this, m);
+		};
+
+		_proto.premultiply = function premultiply(m) {
+			return this.multiplyMatrices(m, this);
+		};
+
+		_proto.multiplyMatrices = function multiplyMatrices(a, b) {
+			var ae = a.elements;
+			var be = b.elements;
+			var te = this.elements;
+			var a11 = ae[0],
+					a12 = ae[3],
+					a13 = ae[6];
+			var a21 = ae[1],
+					a22 = ae[4],
+					a23 = ae[7];
+			var a31 = ae[2],
+					a32 = ae[5],
+					a33 = ae[8];
+			var b11 = be[0],
+					b12 = be[3],
+					b13 = be[6];
+			var b21 = be[1],
+					b22 = be[4],
+					b23 = be[7];
+			var b31 = be[2],
+					b32 = be[5],
+					b33 = be[8];
+			te[0] = a11 * b11 + a12 * b21 + a13 * b31;
+			te[3] = a11 * b12 + a12 * b22 + a13 * b32;
+			te[6] = a11 * b13 + a12 * b23 + a13 * b33;
+			te[1] = a21 * b11 + a22 * b21 + a23 * b31;
+			te[4] = a21 * b12 + a22 * b22 + a23 * b32;
+			te[7] = a21 * b13 + a22 * b23 + a23 * b33;
+			te[2] = a31 * b11 + a32 * b21 + a33 * b31;
+			te[5] = a31 * b12 + a32 * b22 + a33 * b32;
+			te[8] = a31 * b13 + a32 * b23 + a33 * b33;
+			return this;
+		};
+
+		_proto.multiplyScalar = function multiplyScalar(s) {
+			var te = this.elements;
+			te[0] *= s;
+			te[3] *= s;
+			te[6] *= s;
+			te[1] *= s;
+			te[4] *= s;
+			te[7] *= s;
+			te[2] *= s;
+			te[5] *= s;
+			te[8] *= s;
+			return this;
+		};
+
+		_proto.determinant = function determinant() {
+			var te = this.elements;
+			var a = te[0],
+					b = te[1],
+					c = te[2],
+					d = te[3],
+					e = te[4],
+					f = te[5],
+					g = te[6],
+					h = te[7],
+					i = te[8];
+			return a * e * i - a * f * h - b * d * i + b * f * g + c * d * h - c * e * g;
+		};
+
+		_proto.getInverse = function getInverse(matrix, throwOnDegenerate) {
+			if (throwOnDegenerate !== undefined) {
+				console.warn("THREE.Matrix3: .getInverse() can no longer be configured to throw on degenerate.");
+			}
+
+			var me = matrix.elements,
+					te = this.elements,
+					n11 = me[0],
+					n21 = me[1],
+					n31 = me[2],
+					n12 = me[3],
+					n22 = me[4],
+					n32 = me[5],
+					n13 = me[6],
+					n23 = me[7],
+					n33 = me[8],
+					t11 = n33 * n22 - n32 * n23,
+					t12 = n32 * n13 - n33 * n12,
+					t13 = n23 * n12 - n22 * n13,
+					det = n11 * t11 + n21 * t12 + n31 * t13;
+			if (det === 0) return this.set(0, 0, 0, 0, 0, 0, 0, 0, 0);
+			var detInv = 1 / det;
+			te[0] = t11 * detInv;
+			te[1] = (n31 * n23 - n33 * n21) * detInv;
+			te[2] = (n32 * n21 - n31 * n22) * detInv;
+			te[3] = t12 * detInv;
+			te[4] = (n33 * n11 - n31 * n13) * detInv;
+			te[5] = (n31 * n12 - n32 * n11) * detInv;
+			te[6] = t13 * detInv;
+			te[7] = (n21 * n13 - n23 * n11) * detInv;
+			te[8] = (n22 * n11 - n21 * n12) * detInv;
+			return this;
+		};
+
+		_proto.transpose = function transpose() {
+			var tmp;
+			var m = this.elements;
+			tmp = m[1];
+			m[1] = m[3];
+			m[3] = tmp;
+			tmp = m[2];
+			m[2] = m[6];
+			m[6] = tmp;
+			tmp = m[5];
+			m[5] = m[7];
+			m[7] = tmp;
+			return this;
+		};
+
+		_proto.getNormalMatrix = function getNormalMatrix(matrix4) {
+			return this.setFromMatrix4(matrix4).getInverse(this).transpose();
+		};
+
+		_proto.transposeIntoArray = function transposeIntoArray(r) {
+			var m = this.elements;
+			r[0] = m[0];
+			r[1] = m[3];
+			r[2] = m[6];
+			r[3] = m[1];
+			r[4] = m[4];
+			r[5] = m[7];
+			r[6] = m[2];
+			r[7] = m[5];
+			r[8] = m[8];
+			return this;
+		};
+
+		_proto.setUvTransform = function setUvTransform(tx, ty, sx, sy, rotation, cx, cy) {
+			var c = Math.cos(rotation);
+			var s = Math.sin(rotation);
+			this.set(sx * c, sx * s, -sx * (c * cx + s * cy) + cx + tx, -sy * s, sy * c, -sy * (-s * cx + c * cy) + cy + ty, 0, 0, 1);
+		};
+
+		_proto.scale = function scale(sx, sy) {
+			var te = this.elements;
+			te[0] *= sx;
+			te[3] *= sx;
+			te[6] *= sx;
+			te[1] *= sy;
+			te[4] *= sy;
+			te[7] *= sy;
+			return this;
+		};
+
+		_proto.rotate = function rotate(theta) {
+			var c = Math.cos(theta);
+			var s = Math.sin(theta);
+			var te = this.elements;
+			var a11 = te[0],
+					a12 = te[3],
+					a13 = te[6];
+			var a21 = te[1],
+					a22 = te[4],
+					a23 = te[7];
+			te[0] = c * a11 + s * a21;
+			te[3] = c * a12 + s * a22;
+			te[6] = c * a13 + s * a23;
+			te[1] = -s * a11 + c * a21;
+			te[4] = -s * a12 + c * a22;
+			te[7] = -s * a13 + c * a23;
+			return this;
+		};
+
+		_proto.translate = function translate(tx, ty) {
+			var te = this.elements;
+			te[0] += tx * te[2];
+			te[3] += tx * te[5];
+			te[6] += tx * te[8];
+			te[1] += ty * te[2];
+			te[4] += ty * te[5];
+			te[7] += ty * te[8];
+			return this;
+		};
+
+		_proto.equals = function equals(matrix) {
+			var te = this.elements;
+			var me = matrix.elements;
+
+			for (var i = 0; i < 9; i++) {
+				if (te[i] !== me[i]) return false;
+			}
+
+			return true;
+		};
+
+		_proto.fromArray = function fromArray(array, offset) {
+			if (offset === undefined) offset = 0;
+
+			for (var i = 0; i < 9; i++) {
+				this.elements[i] = array[i + offset];
+			}
+
+			return this;
+		};
+
+		_proto.toArray = function toArray(array, offset) {
+			if (array === undefined) array = [];
+			if (offset === undefined) offset = 0;
+			var te = this.elements;
+			array[offset] = te[0];
+			array[offset + 1] = te[1];
+			array[offset + 2] = te[2];
+			array[offset + 3] = te[3];
+			array[offset + 4] = te[4];
+			array[offset + 5] = te[5];
+			array[offset + 6] = te[6];
+			array[offset + 7] = te[7];
+			array[offset + 8] = te[8];
+			return array;
+		};
+
+		return Matrix3;
+	}();
+
+	var Euler = /*#__PURE__*/function () {
+		function Euler(x, y, z, order) {
+			if (x === void 0) {
+				x = 0;
+			}
+
+			if (y === void 0) {
+				y = 0;
+			}
+
+			if (z === void 0) {
+				z = 0;
+			}
+
+			if (order === void 0) {
+				order = Euler.DefaultOrder;
+			}
+
+			Object.defineProperty(this, 'isEuler', {
+				value: true
+			});
+			this._x = x;
+			this._y = y;
+			this._z = z;
+			this._order = order;
+		}
+
+		var _proto = Euler.prototype;
+
+		_proto.set = function set(x, y, z, order) {
+			this._x = x;
+			this._y = y;
+			this._z = z;
+			this._order = order || this._order;
+
+			this._onChangeCallback();
+
+			return this;
+		};
+
+		_proto.clone = function clone() {
+			return new this.constructor(this._x, this._y, this._z, this._order);
+		};
+
+		_proto.copy = function copy(euler) {
+			this._x = euler._x;
+			this._y = euler._y;
+			this._z = euler._z;
+			this._order = euler._order;
+
+			this._onChangeCallback();
+
+			return this;
+		};
+
+		_proto.setFromRotationMatrix = function setFromRotationMatrix(m, order, update) {
+			var clamp = MathUtils.clamp; // assumes the upper 3x3 of m is a pure rotation matrix (i.e, unscaled)
+
+			var te = m.elements;
+			var m11 = te[0],
+					m12 = te[4],
+					m13 = te[8];
+			var m21 = te[1],
+					m22 = te[5],
+					m23 = te[9];
+			var m31 = te[2],
+					m32 = te[6],
+					m33 = te[10];
+			order = order || this._order;
+
+			switch (order) {
+				case 'XYZ':
+					this._y = Math.asin(clamp(m13, -1, 1));
+
+					if (Math.abs(m13) < 0.9999999) {
+						this._x = Math.atan2(-m23, m33);
+						this._z = Math.atan2(-m12, m11);
+					} else {
+						this._x = Math.atan2(m32, m22);
+						this._z = 0;
+					}
+
+					break;
+
+				case 'YXZ':
+					this._x = Math.asin(-clamp(m23, -1, 1));
+
+					if (Math.abs(m23) < 0.9999999) {
+						this._y = Math.atan2(m13, m33);
+						this._z = Math.atan2(m21, m22);
+					} else {
+						this._y = Math.atan2(-m31, m11);
+						this._z = 0;
+					}
+
+					break;
+
+				case 'ZXY':
+					this._x = Math.asin(clamp(m32, -1, 1));
+
+					if (Math.abs(m32) < 0.9999999) {
+						this._y = Math.atan2(-m31, m33);
+						this._z = Math.atan2(-m12, m22);
+					} else {
+						this._y = 0;
+						this._z = Math.atan2(m21, m11);
+					}
+
+					break;
+
+				case 'ZYX':
+					this._y = Math.asin(-clamp(m31, -1, 1));
+
+					if (Math.abs(m31) < 0.9999999) {
+						this._x = Math.atan2(m32, m33);
+						this._z = Math.atan2(m21, m11);
+					} else {
+						this._x = 0;
+						this._z = Math.atan2(-m12, m22);
+					}
+
+					break;
+
+				case 'YZX':
+					this._z = Math.asin(clamp(m21, -1, 1));
+
+					if (Math.abs(m21) < 0.9999999) {
+						this._x = Math.atan2(-m23, m22);
+						this._y = Math.atan2(-m31, m11);
+					} else {
+						this._x = 0;
+						this._y = Math.atan2(m13, m33);
+					}
+
+					break;
+
+				case 'XZY':
+					this._z = Math.asin(-clamp(m12, -1, 1));
+
+					if (Math.abs(m12) < 0.9999999) {
+						this._x = Math.atan2(m32, m22);
+						this._y = Math.atan2(m13, m11);
+					} else {
+						this._x = Math.atan2(-m23, m33);
+						this._y = 0;
+					}
+
+					break;
+
+				default:
+					console.warn('THREE.Euler: .setFromRotationMatrix() encountered an unknown order: ' + order);
+			}
+
+			this._order = order;
+			if (update !== false) this._onChangeCallback();
+			return this;
+		};
+
+		_proto.setFromQuaternion = function setFromQuaternion(q, order, update) {
+			_matrix.makeRotationFromQuaternion(q);
+
+			return this.setFromRotationMatrix(_matrix, order, update);
+		};
+
+		_proto.setFromVector3 = function setFromVector3(v, order) {
+			return this.set(v.x, v.y, v.z, order || this._order);
+		};
+
+		_proto.reorder = function reorder(newOrder) {
+			// WARNING: this discards revolution information -bhouston
+			_quaternion$1.setFromEuler(this);
+
+			return this.setFromQuaternion(_quaternion$1, newOrder);
+		};
+
+		_proto.equals = function equals(euler) {
+			return euler._x === this._x && euler._y === this._y && euler._z === this._z && euler._order === this._order;
+		};
+
+		_proto.fromArray = function fromArray(array) {
+			this._x = array[0];
+			this._y = array[1];
+			this._z = array[2];
+			if (array[3] !== undefined) this._order = array[3];
+
+			this._onChangeCallback();
+
+			return this;
+		};
+
+		_proto.toArray = function toArray(array, offset) {
+			if (array === undefined) array = [];
+			if (offset === undefined) offset = 0;
+			array[offset] = this._x;
+			array[offset + 1] = this._y;
+			array[offset + 2] = this._z;
+			array[offset + 3] = this._order;
+			return array;
+		};
+
+		_proto.toVector3 = function toVector3(optionalResult) {
+			if (optionalResult) {
+				return optionalResult.set(this._x, this._y, this._z);
+			} else {
+				return new Vector3(this._x, this._y, this._z);
+			}
+		};
+
+		_proto._onChange = function _onChange(callback) {
+			this._onChangeCallback = callback;
+			return this;
+		};
+
+		_proto._onChangeCallback = function _onChangeCallback() {};
+
+		_createClass(Euler, [{
+			key: "x",
+			get: function get() {
+				return this._x;
+			},
+			set: function set(value) {
+				this._x = value;
+
+				this._onChangeCallback();
+			}
+		}, {
+			key: "y",
+			get: function get() {
+				return this._y;
+			},
+			set: function set(value) {
+				this._y = value;
+
+				this._onChangeCallback();
+			}
+		}, {
+			key: "z",
+			get: function get() {
+				return this._z;
+			},
+			set: function set(value) {
+				this._z = value;
+
+				this._onChangeCallback();
+			}
+		}, {
+			key: "order",
+			get: function get() {
+				return this._order;
+			},
+			set: function set(value) {
+				this._order = value;
+
+				this._onChangeCallback();
+			}
+		}]);
+
+		return Euler;
+	}();
+
+	Euler.DefaultOrder = 'XYZ';
+	Euler.RotationOrders = ['XYZ', 'YZX', 'ZXY', 'XZY', 'YXZ', 'ZYX'];
+
+	var _matrix = /*@__PURE__*/new Matrix4();
+
+	var _quaternion$1 = /*@__PURE__*/new Quaternion();
+
+	var Vector2 = /*#__PURE__*/function () {
+		function Vector2(x, y) {
+			if (x === void 0) {
+				x = 0;
+			}
+
+			if (y === void 0) {
+				y = 0;
+			}
+
+			Object.defineProperty(this, 'isVector2', {
+				value: true
+			});
+			this.x = x;
+			this.y = y;
+		}
+
+		var _proto = Vector2.prototype;
+
+		_proto.set = function set(x, y) {
+			this.x = x;
+			this.y = y;
+			return this;
+		};
+
+		_proto.setScalar = function setScalar(scalar) {
+			this.x = scalar;
+			this.y = scalar;
+			return this;
+		};
+
+		_proto.setX = function setX(x) {
+			this.x = x;
+			return this;
+		};
+
+		_proto.setY = function setY(y) {
+			this.y = y;
+			return this;
+		};
+
+		_proto.setComponent = function setComponent(index, value) {
+			switch (index) {
+				case 0:
+					this.x = value;
+					break;
+
+				case 1:
+					this.y = value;
+					break;
+
+				default:
+					throw new Error('index is out of range: ' + index);
+			}
+
+			return this;
+		};
+
+		_proto.getComponent = function getComponent(index) {
+			switch (index) {
+				case 0:
+					return this.x;
+
+				case 1:
+					return this.y;
+
+				default:
+					throw new Error('index is out of range: ' + index);
+			}
+		};
+
+		_proto.clone = function clone() {
+			return new this.constructor(this.x, this.y);
+		};
+
+		_proto.copy = function copy(v) {
+			this.x = v.x;
+			this.y = v.y;
+			return this;
+		};
+
+		_proto.add = function add(v, w) {
+			if (w !== undefined) {
+				console.warn('THREE.Vector2: .add() now only accepts one argument. Use .addVectors( a, b ) instead.');
+				return this.addVectors(v, w);
+			}
+
+			this.x += v.x;
+			this.y += v.y;
+			return this;
+		};
+
+		_proto.addScalar = function addScalar(s) {
+			this.x += s;
+			this.y += s;
+			return this;
+		};
+
+		_proto.addVectors = function addVectors(a, b) {
+			this.x = a.x + b.x;
+			this.y = a.y + b.y;
+			return this;
+		};
+
+		_proto.addScaledVector = function addScaledVector(v, s) {
+			this.x += v.x * s;
+			this.y += v.y * s;
+			return this;
+		};
+
+		_proto.sub = function sub(v, w) {
+			if (w !== undefined) {
+				console.warn('THREE.Vector2: .sub() now only accepts one argument. Use .subVectors( a, b ) instead.');
+				return this.subVectors(v, w);
+			}
+
+			this.x -= v.x;
+			this.y -= v.y;
+			return this;
+		};
+
+		_proto.subScalar = function subScalar(s) {
+			this.x -= s;
+			this.y -= s;
+			return this;
+		};
+
+		_proto.subVectors = function subVectors(a, b) {
+			this.x = a.x - b.x;
+			this.y = a.y - b.y;
+			return this;
+		};
+
+		_proto.multiply = function multiply(v) {
+			this.x *= v.x;
+			this.y *= v.y;
+			return this;
+		};
+
+		_proto.multiplyScalar = function multiplyScalar(scalar) {
+			this.x *= scalar;
+			this.y *= scalar;
+			return this;
+		};
+
+		_proto.divide = function divide(v) {
+			this.x /= v.x;
+			this.y /= v.y;
+			return this;
+		};
+
+		_proto.divideScalar = function divideScalar(scalar) {
+			return this.multiplyScalar(1 / scalar);
+		};
+
+		_proto.applyMatrix3 = function applyMatrix3(m) {
+			var x = this.x,
+					y = this.y;
+			var e = m.elements;
+			this.x = e[0] * x + e[3] * y + e[6];
+			this.y = e[1] * x + e[4] * y + e[7];
+			return this;
+		};
+
+		_proto.min = function min(v) {
+			this.x = Math.min(this.x, v.x);
+			this.y = Math.min(this.y, v.y);
+			return this;
+		};
+
+		_proto.max = function max(v) {
+			this.x = Math.max(this.x, v.x);
+			this.y = Math.max(this.y, v.y);
+			return this;
+		};
+
+		_proto.clamp = function clamp(min, max) {
+			// assumes min < max, componentwise
+			this.x = Math.max(min.x, Math.min(max.x, this.x));
+			this.y = Math.max(min.y, Math.min(max.y, this.y));
+			return this;
+		};
+
+		_proto.clampScalar = function clampScalar(minVal, maxVal) {
+			this.x = Math.max(minVal, Math.min(maxVal, this.x));
+			this.y = Math.max(minVal, Math.min(maxVal, this.y));
+			return this;
+		};
+
+		_proto.clampLength = function clampLength(min, max) {
+			var length = this.length();
+			return this.divideScalar(length || 1).multiplyScalar(Math.max(min, Math.min(max, length)));
+		};
+
+		_proto.floor = function floor() {
+			this.x = Math.floor(this.x);
+			this.y = Math.floor(this.y);
+			return this;
+		};
+
+		_proto.ceil = function ceil() {
+			this.x = Math.ceil(this.x);
+			this.y = Math.ceil(this.y);
+			return this;
+		};
+
+		_proto.round = function round() {
+			this.x = Math.round(this.x);
+			this.y = Math.round(this.y);
+			return this;
+		};
+
+		_proto.roundToZero = function roundToZero() {
+			this.x = this.x < 0 ? Math.ceil(this.x) : Math.floor(this.x);
+			this.y = this.y < 0 ? Math.ceil(this.y) : Math.floor(this.y);
+			return this;
+		};
+
+		_proto.negate = function negate() {
+			this.x = -this.x;
+			this.y = -this.y;
+			return this;
+		};
+
+		_proto.dot = function dot(v) {
+			return this.x * v.x + this.y * v.y;
+		};
+
+		_proto.cross = function cross(v) {
+			return this.x * v.y - this.y * v.x;
+		};
+
+		_proto.lengthSq = function lengthSq() {
+			return this.x * this.x + this.y * this.y;
+		};
+
+		_proto.length = function length() {
+			return Math.sqrt(this.x * this.x + this.y * this.y);
+		};
+
+		_proto.manhattanLength = function manhattanLength() {
+			return Math.abs(this.x) + Math.abs(this.y);
+		};
+
+		_proto.normalize = function normalize() {
+			return this.divideScalar(this.length() || 1);
+		};
+
+		_proto.angle = function angle() {
+			// computes the angle in radians with respect to the positive x-axis
+			var angle = Math.atan2(-this.y, -this.x) + Math.PI;
+			return angle;
+		};
+
+		_proto.distanceTo = function distanceTo(v) {
+			return Math.sqrt(this.distanceToSquared(v));
+		};
+
+		_proto.distanceToSquared = function distanceToSquared(v) {
+			var dx = this.x - v.x,
+					dy = this.y - v.y;
+			return dx * dx + dy * dy;
+		};
+
+		_proto.manhattanDistanceTo = function manhattanDistanceTo(v) {
+			return Math.abs(this.x - v.x) + Math.abs(this.y - v.y);
+		};
+
+		_proto.setLength = function setLength(length) {
+			return this.normalize().multiplyScalar(length);
+		};
+
+		_proto.lerp = function lerp(v, alpha) {
+			this.x += (v.x - this.x) * alpha;
+			this.y += (v.y - this.y) * alpha;
+			return this;
+		};
+
+		_proto.lerpVectors = function lerpVectors(v1, v2, alpha) {
+			this.x = v1.x + (v2.x - v1.x) * alpha;
+			this.y = v1.y + (v2.y - v1.y) * alpha;
+			return this;
+		};
+
+		_proto.equals = function equals(v) {
+			return v.x === this.x && v.y === this.y;
+		};
+
+		_proto.fromArray = function fromArray(array, offset) {
+			if (offset === undefined) offset = 0;
+			this.x = array[offset];
+			this.y = array[offset + 1];
+			return this;
+		};
+
+		_proto.toArray = function toArray(array, offset) {
+			if (array === undefined) array = [];
+			if (offset === undefined) offset = 0;
+			array[offset] = this.x;
+			array[offset + 1] = this.y;
+			return array;
+		};
+
+		_proto.fromBufferAttribute = function fromBufferAttribute(attribute, index, offset) {
+			if (offset !== undefined) {
+				console.warn('THREE.Vector2: offset has been removed from .fromBufferAttribute().');
+			}
+
+			this.x = attribute.getX(index);
+			this.y = attribute.getY(index);
+			return this;
+		};
+
+		_proto.rotateAround = function rotateAround(center, angle) {
+			var c = Math.cos(angle),
+					s = Math.sin(angle);
+			var x = this.x - center.x;
+			var y = this.y - center.y;
+			this.x = x * c - y * s + center.x;
+			this.y = x * s + y * c + center.y;
+			return this;
+		};
+
+		_proto.random = function random() {
+			this.x = Math.random();
+			this.y = Math.random();
+			return this;
+		};
+
+		_createClass(Vector2, [{
+			key: "width",
+			get: function get() {
+				return this.x;
+			},
+			set: function set(value) {
+				this.x = value;
+			}
+		}, {
+			key: "height",
+			get: function get() {
+				return this.y;
+			},
+			set: function set(value) {
+				this.y = value;
+			}
+		}]);
+
+		return Vector2;
+	}();
+
+	var _colorKeywords = {
+		'aliceblue': 0xF0F8FF,
+		'antiquewhite': 0xFAEBD7,
+		'aqua': 0x00FFFF,
+		'aquamarine': 0x7FFFD4,
+		'azure': 0xF0FFFF,
+		'beige': 0xF5F5DC,
+		'bisque': 0xFFE4C4,
+		'black': 0x000000,
+		'blanchedalmond': 0xFFEBCD,
+		'blue': 0x0000FF,
+		'blueviolet': 0x8A2BE2,
+		'brown': 0xA52A2A,
+		'burlywood': 0xDEB887,
+		'cadetblue': 0x5F9EA0,
+		'chartreuse': 0x7FFF00,
+		'chocolate': 0xD2691E,
+		'coral': 0xFF7F50,
+		'cornflowerblue': 0x6495ED,
+		'cornsilk': 0xFFF8DC,
+		'crimson': 0xDC143C,
+		'cyan': 0x00FFFF,
+		'darkblue': 0x00008B,
+		'darkcyan': 0x008B8B,
+		'darkgoldenrod': 0xB8860B,
+		'darkgray': 0xA9A9A9,
+		'darkgreen': 0x006400,
+		'darkgrey': 0xA9A9A9,
+		'darkkhaki': 0xBDB76B,
+		'darkmagenta': 0x8B008B,
+		'darkolivegreen': 0x556B2F,
+		'darkorange': 0xFF8C00,
+		'darkorchid': 0x9932CC,
+		'darkred': 0x8B0000,
+		'darksalmon': 0xE9967A,
+		'darkseagreen': 0x8FBC8F,
+		'darkslateblue': 0x483D8B,
+		'darkslategray': 0x2F4F4F,
+		'darkslategrey': 0x2F4F4F,
+		'darkturquoise': 0x00CED1,
+		'darkviolet': 0x9400D3,
+		'deeppink': 0xFF1493,
+		'deepskyblue': 0x00BFFF,
+		'dimgray': 0x696969,
+		'dimgrey': 0x696969,
+		'dodgerblue': 0x1E90FF,
+		'firebrick': 0xB22222,
+		'floralwhite': 0xFFFAF0,
+		'forestgreen': 0x228B22,
+		'fuchsia': 0xFF00FF,
+		'gainsboro': 0xDCDCDC,
+		'ghostwhite': 0xF8F8FF,
+		'gold': 0xFFD700,
+		'goldenrod': 0xDAA520,
+		'gray': 0x808080,
+		'green': 0x008000,
+		'greenyellow': 0xADFF2F,
+		'grey': 0x808080,
+		'honeydew': 0xF0FFF0,
+		'hotpink': 0xFF69B4,
+		'indianred': 0xCD5C5C,
+		'indigo': 0x4B0082,
+		'ivory': 0xFFFFF0,
+		'khaki': 0xF0E68C,
+		'lavender': 0xE6E6FA,
+		'lavenderblush': 0xFFF0F5,
+		'lawngreen': 0x7CFC00,
+		'lemonchiffon': 0xFFFACD,
+		'lightblue': 0xADD8E6,
+		'lightcoral': 0xF08080,
+		'lightcyan': 0xE0FFFF,
+		'lightgoldenrodyellow': 0xFAFAD2,
+		'lightgray': 0xD3D3D3,
+		'lightgreen': 0x90EE90,
+		'lightgrey': 0xD3D3D3,
+		'lightpink': 0xFFB6C1,
+		'lightsalmon': 0xFFA07A,
+		'lightseagreen': 0x20B2AA,
+		'lightskyblue': 0x87CEFA,
+		'lightslategray': 0x778899,
+		'lightslategrey': 0x778899,
+		'lightsteelblue': 0xB0C4DE,
+		'lightyellow': 0xFFFFE0,
+		'lime': 0x00FF00,
+		'limegreen': 0x32CD32,
+		'linen': 0xFAF0E6,
+		'magenta': 0xFF00FF,
+		'maroon': 0x800000,
+		'mediumaquamarine': 0x66CDAA,
+		'mediumblue': 0x0000CD,
+		'mediumorchid': 0xBA55D3,
+		'mediumpurple': 0x9370DB,
+		'mediumseagreen': 0x3CB371,
+		'mediumslateblue': 0x7B68EE,
+		'mediumspringgreen': 0x00FA9A,
+		'mediumturquoise': 0x48D1CC,
+		'mediumvioletred': 0xC71585,
+		'midnightblue': 0x191970,
+		'mintcream': 0xF5FFFA,
+		'mistyrose': 0xFFE4E1,
+		'moccasin': 0xFFE4B5,
+		'navajowhite': 0xFFDEAD,
+		'navy': 0x000080,
+		'oldlace': 0xFDF5E6,
+		'olive': 0x808000,
+		'olivedrab': 0x6B8E23,
+		'orange': 0xFFA500,
+		'orangered': 0xFF4500,
+		'orchid': 0xDA70D6,
+		'palegoldenrod': 0xEEE8AA,
+		'palegreen': 0x98FB98,
+		'paleturquoise': 0xAFEEEE,
+		'palevioletred': 0xDB7093,
+		'papayawhip': 0xFFEFD5,
+		'peachpuff': 0xFFDAB9,
+		'peru': 0xCD853F,
+		'pink': 0xFFC0CB,
+		'plum': 0xDDA0DD,
+		'powderblue': 0xB0E0E6,
+		'purple': 0x800080,
+		'rebeccapurple': 0x663399,
+		'red': 0xFF0000,
+		'rosybrown': 0xBC8F8F,
+		'royalblue': 0x4169E1,
+		'saddlebrown': 0x8B4513,
+		'salmon': 0xFA8072,
+		'sandybrown': 0xF4A460,
+		'seagreen': 0x2E8B57,
+		'seashell': 0xFFF5EE,
+		'sienna': 0xA0522D,
+		'silver': 0xC0C0C0,
+		'skyblue': 0x87CEEB,
+		'slateblue': 0x6A5ACD,
+		'slategray': 0x708090,
+		'slategrey': 0x708090,
+		'snow': 0xFFFAFA,
+		'springgreen': 0x00FF7F,
+		'steelblue': 0x4682B4,
+		'tan': 0xD2B48C,
+		'teal': 0x008080,
+		'thistle': 0xD8BFD8,
+		'tomato': 0xFF6347,
+		'turquoise': 0x40E0D0,
+		'violet': 0xEE82EE,
+		'wheat': 0xF5DEB3,
+		'white': 0xFFFFFF,
+		'whitesmoke': 0xF5F5F5,
+		'yellow': 0xFFFF00,
+		'yellowgreen': 0x9ACD32
+	};
+	var _hslA = {
+		h: 0,
+		s: 0,
+		l: 0
+	};
+	var _hslB = {
+		h: 0,
+		s: 0,
+		l: 0
+	};
+
+	function hue2rgb(p, q, t) {
+		if (t < 0) t += 1;
+		if (t > 1) t -= 1;
+		if (t < 1 / 6) return p + (q - p) * 6 * t;
+		if (t < 1 / 2) return q;
+		if (t < 2 / 3) return p + (q - p) * 6 * (2 / 3 - t);
+		return p;
+	}
+
+	function SRGBToLinear(c) {
+		return c < 0.04045 ? c * 0.0773993808 : Math.pow(c * 0.9478672986 + 0.0521327014, 2.4);
+	}
+
+	function LinearToSRGB(c) {
+		return c < 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 0.41666) - 0.055;
+	}
+
+	var Color = /*#__PURE__*/function () {
+		function Color(r, g, b) {
+			Object.defineProperty(this, 'isColor', {
+				value: true
+			});
+
+			if (g === undefined && b === undefined) {
+				// r is THREE.Color, hex or string
+				return this.set(r);
+			}
+
+			return this.setRGB(r, g, b);
+		}
+
+		var _proto = Color.prototype;
+
+		_proto.set = function set(value) {
+			if (value && value.isColor) {
+				this.copy(value);
+			} else if (typeof value === 'number') {
+				this.setHex(value);
+			} else if (typeof value === 'string') {
+				this.setStyle(value);
+			}
+
+			return this;
+		};
+
+		_proto.setScalar = function setScalar(scalar) {
+			this.r = scalar;
+			this.g = scalar;
+			this.b = scalar;
+			return this;
+		};
+
+		_proto.setHex = function setHex(hex) {
+			hex = Math.floor(hex);
+			this.r = (hex >> 16 & 255) / 255;
+			this.g = (hex >> 8 & 255) / 255;
+			this.b = (hex & 255) / 255;
+			return this;
+		};
+
+		_proto.setRGB = function setRGB(r, g, b) {
+			this.r = r;
+			this.g = g;
+			this.b = b;
+			return this;
+		};
+
+		_proto.setHSL = function setHSL(h, s, l) {
+			// h,s,l ranges are in 0.0 - 1.0
+			h = MathUtils.euclideanModulo(h, 1);
+			s = MathUtils.clamp(s, 0, 1);
+			l = MathUtils.clamp(l, 0, 1);
+
+			if (s === 0) {
+				this.r = this.g = this.b = l;
+			} else {
+				var p = l <= 0.5 ? l * (1 + s) : l + s - l * s;
+				var q = 2 * l - p;
+				this.r = hue2rgb(q, p, h + 1 / 3);
+				this.g = hue2rgb(q, p, h);
+				this.b = hue2rgb(q, p, h - 1 / 3);
+			}
+
+			return this;
+		};
+
+		_proto.setStyle = function setStyle(style) {
+			function handleAlpha(string) {
+				if (string === undefined) return;
+
+				if (parseFloat(string) < 1) {
+					console.warn('THREE.Color: Alpha component of ' + style + ' will be ignored.');
+				}
+			}
+
+			var m;
+
+			if (m = /^((?:rgb|hsl)a?)\(\s*([^\)]*)\)/.exec(style)) {
+				// rgb / hsl
+				var color;
+				var name = m[1];
+				var components = m[2];
+
+				switch (name) {
+					case 'rgb':
+					case 'rgba':
+						if (color = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(,\s*([0-9]*\.?[0-9]+)\s*)?$/.exec(components)) {
+							// rgb(255,0,0) rgba(255,0,0,0.5)
+							this.r = Math.min(255, parseInt(color[1], 10)) / 255;
+							this.g = Math.min(255, parseInt(color[2], 10)) / 255;
+							this.b = Math.min(255, parseInt(color[3], 10)) / 255;
+							handleAlpha(color[5]);
+							return this;
+						}
+
+						if (color = /^(\d+)\%\s*,\s*(\d+)\%\s*,\s*(\d+)\%\s*(,\s*([0-9]*\.?[0-9]+)\s*)?$/.exec(components)) {
+							// rgb(100%,0%,0%) rgba(100%,0%,0%,0.5)
+							this.r = Math.min(100, parseInt(color[1], 10)) / 100;
+							this.g = Math.min(100, parseInt(color[2], 10)) / 100;
+							this.b = Math.min(100, parseInt(color[3], 10)) / 100;
+							handleAlpha(color[5]);
+							return this;
+						}
+
+						break;
+
+					case 'hsl':
+					case 'hsla':
+						if (color = /^([0-9]*\.?[0-9]+)\s*,\s*(\d+)\%\s*,\s*(\d+)\%\s*(,\s*([0-9]*\.?[0-9]+)\s*)?$/.exec(components)) {
+							// hsl(120,50%,50%) hsla(120,50%,50%,0.5)
+							var h = parseFloat(color[1]) / 360;
+							var s = parseInt(color[2], 10) / 100;
+							var l = parseInt(color[3], 10) / 100;
+							handleAlpha(color[5]);
+							return this.setHSL(h, s, l);
+						}
+
+						break;
+				}
+			} else if (m = /^\#([A-Fa-f0-9]+)$/.exec(style)) {
+				// hex color
+				var hex = m[1];
+				var size = hex.length;
+
+				if (size === 3) {
+					// #ff0
+					this.r = parseInt(hex.charAt(0) + hex.charAt(0), 16) / 255;
+					this.g = parseInt(hex.charAt(1) + hex.charAt(1), 16) / 255;
+					this.b = parseInt(hex.charAt(2) + hex.charAt(2), 16) / 255;
+					return this;
+				} else if (size === 6) {
+					// #ff0000
+					this.r = parseInt(hex.charAt(0) + hex.charAt(1), 16) / 255;
+					this.g = parseInt(hex.charAt(2) + hex.charAt(3), 16) / 255;
+					this.b = parseInt(hex.charAt(4) + hex.charAt(5), 16) / 255;
+					return this;
+				}
+			}
+
+			if (style && style.length > 0) {
+				return this.setColorName(style);
+			}
+
+			return this;
+		};
+
+		_proto.setColorName = function setColorName(style) {
+			// color keywords
+			var hex = _colorKeywords[style];
+
+			if (hex !== undefined) {
+				// red
+				this.setHex(hex);
+			} else {
+				// unknown color
+				console.warn('THREE.Color: Unknown color ' + style);
+			}
+
+			return this;
+		};
+
+		_proto.clone = function clone() {
+			return new this.constructor(this.r, this.g, this.b);
+		};
+
+		_proto.copy = function copy(color) {
+			this.r = color.r;
+			this.g = color.g;
+			this.b = color.b;
+			return this;
+		};
+
+		_proto.copyGammaToLinear = function copyGammaToLinear(color, gammaFactor) {
+			if (gammaFactor === undefined) gammaFactor = 2.0;
+			this.r = Math.pow(color.r, gammaFactor);
+			this.g = Math.pow(color.g, gammaFactor);
+			this.b = Math.pow(color.b, gammaFactor);
+			return this;
+		};
+
+		_proto.copyLinearToGamma = function copyLinearToGamma(color, gammaFactor) {
+			if (gammaFactor === undefined) gammaFactor = 2.0;
+			var safeInverse = gammaFactor > 0 ? 1.0 / gammaFactor : 1.0;
+			this.r = Math.pow(color.r, safeInverse);
+			this.g = Math.pow(color.g, safeInverse);
+			this.b = Math.pow(color.b, safeInverse);
+			return this;
+		};
+
+		_proto.convertGammaToLinear = function convertGammaToLinear(gammaFactor) {
+			this.copyGammaToLinear(this, gammaFactor);
+			return this;
+		};
+
+		_proto.convertLinearToGamma = function convertLinearToGamma(gammaFactor) {
+			this.copyLinearToGamma(this, gammaFactor);
+			return this;
+		};
+
+		_proto.copySRGBToLinear = function copySRGBToLinear(color) {
+			this.r = SRGBToLinear(color.r);
+			this.g = SRGBToLinear(color.g);
+			this.b = SRGBToLinear(color.b);
+			return this;
+		};
+
+		_proto.copyLinearToSRGB = function copyLinearToSRGB(color) {
+			this.r = LinearToSRGB(color.r);
+			this.g = LinearToSRGB(color.g);
+			this.b = LinearToSRGB(color.b);
+			return this;
+		};
+
+		_proto.convertSRGBToLinear = function convertSRGBToLinear() {
+			this.copySRGBToLinear(this);
+			return this;
+		};
+
+		_proto.convertLinearToSRGB = function convertLinearToSRGB() {
+			this.copyLinearToSRGB(this);
+			return this;
+		};
+
+		_proto.getHex = function getHex() {
+			return this.r * 255 << 16 ^ this.g * 255 << 8 ^ this.b * 255 << 0;
+		};
+
+		_proto.getHexString = function getHexString() {
+			return ('000000' + this.getHex().toString(16)).slice(-6);
+		};
+
+		_proto.getHSL = function getHSL(target) {
+			// h,s,l ranges are in 0.0 - 1.0
+			if (target === undefined) {
+				console.warn('THREE.Color: .getHSL() target is now required');
+				target = {
+					h: 0,
+					s: 0,
+					l: 0
+				};
+			}
+
+			var r = this.r,
+					g = this.g,
+					b = this.b;
+			var max = Math.max(r, g, b);
+			var min = Math.min(r, g, b);
+			var hue, saturation;
+			var lightness = (min + max) / 2.0;
+
+			if (min === max) {
+				hue = 0;
+				saturation = 0;
+			} else {
+				var delta = max - min;
+				saturation = lightness <= 0.5 ? delta / (max + min) : delta / (2 - max - min);
+
+				switch (max) {
+					case r:
+						hue = (g - b) / delta + (g < b ? 6 : 0);
+						break;
+
+					case g:
+						hue = (b - r) / delta + 2;
+						break;
+
+					case b:
+						hue = (r - g) / delta + 4;
+						break;
+				}
+
+				hue /= 6;
+			}
+
+			target.h = hue;
+			target.s = saturation;
+			target.l = lightness;
+			return target;
+		};
+
+		_proto.getStyle = function getStyle() {
+			return 'rgb(' + (this.r * 255 | 0) + ',' + (this.g * 255 | 0) + ',' + (this.b * 255 | 0) + ')';
+		};
+
+		_proto.offsetHSL = function offsetHSL(h, s, l) {
+			this.getHSL(_hslA);
+			_hslA.h += h;
+			_hslA.s += s;
+			_hslA.l += l;
+			this.setHSL(_hslA.h, _hslA.s, _hslA.l);
+			return this;
+		};
+
+		_proto.add = function add(color) {
+			this.r += color.r;
+			this.g += color.g;
+			this.b += color.b;
+			return this;
+		};
+
+		_proto.addColors = function addColors(color1, color2) {
+			this.r = color1.r + color2.r;
+			this.g = color1.g + color2.g;
+			this.b = color1.b + color2.b;
+			return this;
+		};
+
+		_proto.addScalar = function addScalar(s) {
+			this.r += s;
+			this.g += s;
+			this.b += s;
+			return this;
+		};
+
+		_proto.sub = function sub(color) {
+			this.r = Math.max(0, this.r - color.r);
+			this.g = Math.max(0, this.g - color.g);
+			this.b = Math.max(0, this.b - color.b);
+			return this;
+		};
+
+		_proto.multiply = function multiply(color) {
+			this.r *= color.r;
+			this.g *= color.g;
+			this.b *= color.b;
+			return this;
+		};
+
+		_proto.multiplyScalar = function multiplyScalar(s) {
+			this.r *= s;
+			this.g *= s;
+			this.b *= s;
+			return this;
+		};
+
+		_proto.lerp = function lerp(color, alpha) {
+			this.r += (color.r - this.r) * alpha;
+			this.g += (color.g - this.g) * alpha;
+			this.b += (color.b - this.b) * alpha;
+			return this;
+		};
+
+		_proto.lerpHSL = function lerpHSL(color, alpha) {
+			this.getHSL(_hslA);
+			color.getHSL(_hslB);
+			var h = MathUtils.lerp(_hslA.h, _hslB.h, alpha);
+			var s = MathUtils.lerp(_hslA.s, _hslB.s, alpha);
+			var l = MathUtils.lerp(_hslA.l, _hslB.l, alpha);
+			this.setHSL(h, s, l);
+			return this;
+		};
+
+		_proto.equals = function equals(c) {
+			return c.r === this.r && c.g === this.g && c.b === this.b;
+		};
+
+		_proto.fromArray = function fromArray(array, offset) {
+			if (offset === undefined) offset = 0;
+			this.r = array[offset];
+			this.g = array[offset + 1];
+			this.b = array[offset + 2];
+			return this;
+		};
+
+		_proto.toArray = function toArray(array, offset) {
+			if (array === undefined) array = [];
+			if (offset === undefined) offset = 0;
+			array[offset] = this.r;
+			array[offset + 1] = this.g;
+			array[offset + 2] = this.b;
+			return array;
+		};
+
+		_proto.fromBufferAttribute = function fromBufferAttribute(attribute, index) {
+			this.r = attribute.getX(index);
+			this.g = attribute.getY(index);
+			this.b = attribute.getZ(index);
+
+			if (attribute.normalized === true) {
+				// assuming Uint8Array
+				this.r /= 255;
+				this.g /= 255;
+				this.b /= 255;
+			}
+
+			return this;
+		};
+
+		_proto.toJSON = function toJSON() {
+			return this.getHex();
+		};
+
+		return Color;
+	}();
+
+	Color.NAMES = _colorKeywords;
+	Color.prototype.r = 1;
+	Color.prototype.g = 1;
+	Color.prototype.b = 1;
+
 	/**
 	 * Extensible curve object.
 	 *
@@ -3659,587 +4921,6 @@
 		}
 	});
 
-	var _colorKeywords = {
-		'aliceblue': 0xF0F8FF,
-		'antiquewhite': 0xFAEBD7,
-		'aqua': 0x00FFFF,
-		'aquamarine': 0x7FFFD4,
-		'azure': 0xF0FFFF,
-		'beige': 0xF5F5DC,
-		'bisque': 0xFFE4C4,
-		'black': 0x000000,
-		'blanchedalmond': 0xFFEBCD,
-		'blue': 0x0000FF,
-		'blueviolet': 0x8A2BE2,
-		'brown': 0xA52A2A,
-		'burlywood': 0xDEB887,
-		'cadetblue': 0x5F9EA0,
-		'chartreuse': 0x7FFF00,
-		'chocolate': 0xD2691E,
-		'coral': 0xFF7F50,
-		'cornflowerblue': 0x6495ED,
-		'cornsilk': 0xFFF8DC,
-		'crimson': 0xDC143C,
-		'cyan': 0x00FFFF,
-		'darkblue': 0x00008B,
-		'darkcyan': 0x008B8B,
-		'darkgoldenrod': 0xB8860B,
-		'darkgray': 0xA9A9A9,
-		'darkgreen': 0x006400,
-		'darkgrey': 0xA9A9A9,
-		'darkkhaki': 0xBDB76B,
-		'darkmagenta': 0x8B008B,
-		'darkolivegreen': 0x556B2F,
-		'darkorange': 0xFF8C00,
-		'darkorchid': 0x9932CC,
-		'darkred': 0x8B0000,
-		'darksalmon': 0xE9967A,
-		'darkseagreen': 0x8FBC8F,
-		'darkslateblue': 0x483D8B,
-		'darkslategray': 0x2F4F4F,
-		'darkslategrey': 0x2F4F4F,
-		'darkturquoise': 0x00CED1,
-		'darkviolet': 0x9400D3,
-		'deeppink': 0xFF1493,
-		'deepskyblue': 0x00BFFF,
-		'dimgray': 0x696969,
-		'dimgrey': 0x696969,
-		'dodgerblue': 0x1E90FF,
-		'firebrick': 0xB22222,
-		'floralwhite': 0xFFFAF0,
-		'forestgreen': 0x228B22,
-		'fuchsia': 0xFF00FF,
-		'gainsboro': 0xDCDCDC,
-		'ghostwhite': 0xF8F8FF,
-		'gold': 0xFFD700,
-		'goldenrod': 0xDAA520,
-		'gray': 0x808080,
-		'green': 0x008000,
-		'greenyellow': 0xADFF2F,
-		'grey': 0x808080,
-		'honeydew': 0xF0FFF0,
-		'hotpink': 0xFF69B4,
-		'indianred': 0xCD5C5C,
-		'indigo': 0x4B0082,
-		'ivory': 0xFFFFF0,
-		'khaki': 0xF0E68C,
-		'lavender': 0xE6E6FA,
-		'lavenderblush': 0xFFF0F5,
-		'lawngreen': 0x7CFC00,
-		'lemonchiffon': 0xFFFACD,
-		'lightblue': 0xADD8E6,
-		'lightcoral': 0xF08080,
-		'lightcyan': 0xE0FFFF,
-		'lightgoldenrodyellow': 0xFAFAD2,
-		'lightgray': 0xD3D3D3,
-		'lightgreen': 0x90EE90,
-		'lightgrey': 0xD3D3D3,
-		'lightpink': 0xFFB6C1,
-		'lightsalmon': 0xFFA07A,
-		'lightseagreen': 0x20B2AA,
-		'lightskyblue': 0x87CEFA,
-		'lightslategray': 0x778899,
-		'lightslategrey': 0x778899,
-		'lightsteelblue': 0xB0C4DE,
-		'lightyellow': 0xFFFFE0,
-		'lime': 0x00FF00,
-		'limegreen': 0x32CD32,
-		'linen': 0xFAF0E6,
-		'magenta': 0xFF00FF,
-		'maroon': 0x800000,
-		'mediumaquamarine': 0x66CDAA,
-		'mediumblue': 0x0000CD,
-		'mediumorchid': 0xBA55D3,
-		'mediumpurple': 0x9370DB,
-		'mediumseagreen': 0x3CB371,
-		'mediumslateblue': 0x7B68EE,
-		'mediumspringgreen': 0x00FA9A,
-		'mediumturquoise': 0x48D1CC,
-		'mediumvioletred': 0xC71585,
-		'midnightblue': 0x191970,
-		'mintcream': 0xF5FFFA,
-		'mistyrose': 0xFFE4E1,
-		'moccasin': 0xFFE4B5,
-		'navajowhite': 0xFFDEAD,
-		'navy': 0x000080,
-		'oldlace': 0xFDF5E6,
-		'olive': 0x808000,
-		'olivedrab': 0x6B8E23,
-		'orange': 0xFFA500,
-		'orangered': 0xFF4500,
-		'orchid': 0xDA70D6,
-		'palegoldenrod': 0xEEE8AA,
-		'palegreen': 0x98FB98,
-		'paleturquoise': 0xAFEEEE,
-		'palevioletred': 0xDB7093,
-		'papayawhip': 0xFFEFD5,
-		'peachpuff': 0xFFDAB9,
-		'peru': 0xCD853F,
-		'pink': 0xFFC0CB,
-		'plum': 0xDDA0DD,
-		'powderblue': 0xB0E0E6,
-		'purple': 0x800080,
-		'rebeccapurple': 0x663399,
-		'red': 0xFF0000,
-		'rosybrown': 0xBC8F8F,
-		'royalblue': 0x4169E1,
-		'saddlebrown': 0x8B4513,
-		'salmon': 0xFA8072,
-		'sandybrown': 0xF4A460,
-		'seagreen': 0x2E8B57,
-		'seashell': 0xFFF5EE,
-		'sienna': 0xA0522D,
-		'silver': 0xC0C0C0,
-		'skyblue': 0x87CEEB,
-		'slateblue': 0x6A5ACD,
-		'slategray': 0x708090,
-		'slategrey': 0x708090,
-		'snow': 0xFFFAFA,
-		'springgreen': 0x00FF7F,
-		'steelblue': 0x4682B4,
-		'tan': 0xD2B48C,
-		'teal': 0x008080,
-		'thistle': 0xD8BFD8,
-		'tomato': 0xFF6347,
-		'turquoise': 0x40E0D0,
-		'violet': 0xEE82EE,
-		'wheat': 0xF5DEB3,
-		'white': 0xFFFFFF,
-		'whitesmoke': 0xF5F5F5,
-		'yellow': 0xFFFF00,
-		'yellowgreen': 0x9ACD32
-	};
-	var _hslA = {
-		h: 0,
-		s: 0,
-		l: 0
-	};
-	var _hslB = {
-		h: 0,
-		s: 0,
-		l: 0
-	};
-
-	function hue2rgb(p, q, t) {
-		if (t < 0) t += 1;
-		if (t > 1) t -= 1;
-		if (t < 1 / 6) return p + (q - p) * 6 * t;
-		if (t < 1 / 2) return q;
-		if (t < 2 / 3) return p + (q - p) * 6 * (2 / 3 - t);
-		return p;
-	}
-
-	function SRGBToLinear(c) {
-		return c < 0.04045 ? c * 0.0773993808 : Math.pow(c * 0.9478672986 + 0.0521327014, 2.4);
-	}
-
-	function LinearToSRGB(c) {
-		return c < 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 0.41666) - 0.055;
-	}
-
-	var Color = /*#__PURE__*/function () {
-		function Color(r, g, b) {
-			Object.defineProperty(this, 'isColor', {
-				value: true
-			});
-
-			if (g === undefined && b === undefined) {
-				// r is THREE.Color, hex or string
-				return this.set(r);
-			}
-
-			return this.setRGB(r, g, b);
-		}
-
-		var _proto = Color.prototype;
-
-		_proto.set = function set(value) {
-			if (value && value.isColor) {
-				this.copy(value);
-			} else if (typeof value === 'number') {
-				this.setHex(value);
-			} else if (typeof value === 'string') {
-				this.setStyle(value);
-			}
-
-			return this;
-		};
-
-		_proto.setScalar = function setScalar(scalar) {
-			this.r = scalar;
-			this.g = scalar;
-			this.b = scalar;
-			return this;
-		};
-
-		_proto.setHex = function setHex(hex) {
-			hex = Math.floor(hex);
-			this.r = (hex >> 16 & 255) / 255;
-			this.g = (hex >> 8 & 255) / 255;
-			this.b = (hex & 255) / 255;
-			return this;
-		};
-
-		_proto.setRGB = function setRGB(r, g, b) {
-			this.r = r;
-			this.g = g;
-			this.b = b;
-			return this;
-		};
-
-		_proto.setHSL = function setHSL(h, s, l) {
-			// h,s,l ranges are in 0.0 - 1.0
-			h = MathUtils.euclideanModulo(h, 1);
-			s = MathUtils.clamp(s, 0, 1);
-			l = MathUtils.clamp(l, 0, 1);
-
-			if (s === 0) {
-				this.r = this.g = this.b = l;
-			} else {
-				var p = l <= 0.5 ? l * (1 + s) : l + s - l * s;
-				var q = 2 * l - p;
-				this.r = hue2rgb(q, p, h + 1 / 3);
-				this.g = hue2rgb(q, p, h);
-				this.b = hue2rgb(q, p, h - 1 / 3);
-			}
-
-			return this;
-		};
-
-		_proto.setStyle = function setStyle(style) {
-			function handleAlpha(string) {
-				if (string === undefined) return;
-
-				if (parseFloat(string) < 1) {
-					console.warn('THREE.Color: Alpha component of ' + style + ' will be ignored.');
-				}
-			}
-
-			var m;
-
-			if (m = /^((?:rgb|hsl)a?)\(\s*([^\)]*)\)/.exec(style)) {
-				// rgb / hsl
-				var color;
-				var name = m[1];
-				var components = m[2];
-
-				switch (name) {
-					case 'rgb':
-					case 'rgba':
-						if (color = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(,\s*([0-9]*\.?[0-9]+)\s*)?$/.exec(components)) {
-							// rgb(255,0,0) rgba(255,0,0,0.5)
-							this.r = Math.min(255, parseInt(color[1], 10)) / 255;
-							this.g = Math.min(255, parseInt(color[2], 10)) / 255;
-							this.b = Math.min(255, parseInt(color[3], 10)) / 255;
-							handleAlpha(color[5]);
-							return this;
-						}
-
-						if (color = /^(\d+)\%\s*,\s*(\d+)\%\s*,\s*(\d+)\%\s*(,\s*([0-9]*\.?[0-9]+)\s*)?$/.exec(components)) {
-							// rgb(100%,0%,0%) rgba(100%,0%,0%,0.5)
-							this.r = Math.min(100, parseInt(color[1], 10)) / 100;
-							this.g = Math.min(100, parseInt(color[2], 10)) / 100;
-							this.b = Math.min(100, parseInt(color[3], 10)) / 100;
-							handleAlpha(color[5]);
-							return this;
-						}
-
-						break;
-
-					case 'hsl':
-					case 'hsla':
-						if (color = /^([0-9]*\.?[0-9]+)\s*,\s*(\d+)\%\s*,\s*(\d+)\%\s*(,\s*([0-9]*\.?[0-9]+)\s*)?$/.exec(components)) {
-							// hsl(120,50%,50%) hsla(120,50%,50%,0.5)
-							var h = parseFloat(color[1]) / 360;
-							var s = parseInt(color[2], 10) / 100;
-							var l = parseInt(color[3], 10) / 100;
-							handleAlpha(color[5]);
-							return this.setHSL(h, s, l);
-						}
-
-						break;
-				}
-			} else if (m = /^\#([A-Fa-f0-9]+)$/.exec(style)) {
-				// hex color
-				var hex = m[1];
-				var size = hex.length;
-
-				if (size === 3) {
-					// #ff0
-					this.r = parseInt(hex.charAt(0) + hex.charAt(0), 16) / 255;
-					this.g = parseInt(hex.charAt(1) + hex.charAt(1), 16) / 255;
-					this.b = parseInt(hex.charAt(2) + hex.charAt(2), 16) / 255;
-					return this;
-				} else if (size === 6) {
-					// #ff0000
-					this.r = parseInt(hex.charAt(0) + hex.charAt(1), 16) / 255;
-					this.g = parseInt(hex.charAt(2) + hex.charAt(3), 16) / 255;
-					this.b = parseInt(hex.charAt(4) + hex.charAt(5), 16) / 255;
-					return this;
-				}
-			}
-
-			if (style && style.length > 0) {
-				return this.setColorName(style);
-			}
-
-			return this;
-		};
-
-		_proto.setColorName = function setColorName(style) {
-			// color keywords
-			var hex = _colorKeywords[style];
-
-			if (hex !== undefined) {
-				// red
-				this.setHex(hex);
-			} else {
-				// unknown color
-				console.warn('THREE.Color: Unknown color ' + style);
-			}
-
-			return this;
-		};
-
-		_proto.clone = function clone() {
-			return new this.constructor(this.r, this.g, this.b);
-		};
-
-		_proto.copy = function copy(color) {
-			this.r = color.r;
-			this.g = color.g;
-			this.b = color.b;
-			return this;
-		};
-
-		_proto.copyGammaToLinear = function copyGammaToLinear(color, gammaFactor) {
-			if (gammaFactor === undefined) gammaFactor = 2.0;
-			this.r = Math.pow(color.r, gammaFactor);
-			this.g = Math.pow(color.g, gammaFactor);
-			this.b = Math.pow(color.b, gammaFactor);
-			return this;
-		};
-
-		_proto.copyLinearToGamma = function copyLinearToGamma(color, gammaFactor) {
-			if (gammaFactor === undefined) gammaFactor = 2.0;
-			var safeInverse = gammaFactor > 0 ? 1.0 / gammaFactor : 1.0;
-			this.r = Math.pow(color.r, safeInverse);
-			this.g = Math.pow(color.g, safeInverse);
-			this.b = Math.pow(color.b, safeInverse);
-			return this;
-		};
-
-		_proto.convertGammaToLinear = function convertGammaToLinear(gammaFactor) {
-			this.copyGammaToLinear(this, gammaFactor);
-			return this;
-		};
-
-		_proto.convertLinearToGamma = function convertLinearToGamma(gammaFactor) {
-			this.copyLinearToGamma(this, gammaFactor);
-			return this;
-		};
-
-		_proto.copySRGBToLinear = function copySRGBToLinear(color) {
-			this.r = SRGBToLinear(color.r);
-			this.g = SRGBToLinear(color.g);
-			this.b = SRGBToLinear(color.b);
-			return this;
-		};
-
-		_proto.copyLinearToSRGB = function copyLinearToSRGB(color) {
-			this.r = LinearToSRGB(color.r);
-			this.g = LinearToSRGB(color.g);
-			this.b = LinearToSRGB(color.b);
-			return this;
-		};
-
-		_proto.convertSRGBToLinear = function convertSRGBToLinear() {
-			this.copySRGBToLinear(this);
-			return this;
-		};
-
-		_proto.convertLinearToSRGB = function convertLinearToSRGB() {
-			this.copyLinearToSRGB(this);
-			return this;
-		};
-
-		_proto.getHex = function getHex() {
-			return this.r * 255 << 16 ^ this.g * 255 << 8 ^ this.b * 255 << 0;
-		};
-
-		_proto.getHexString = function getHexString() {
-			return ('000000' + this.getHex().toString(16)).slice(-6);
-		};
-
-		_proto.getHSL = function getHSL(target) {
-			// h,s,l ranges are in 0.0 - 1.0
-			if (target === undefined) {
-				console.warn('THREE.Color: .getHSL() target is now required');
-				target = {
-					h: 0,
-					s: 0,
-					l: 0
-				};
-			}
-
-			var r = this.r,
-					g = this.g,
-					b = this.b;
-			var max = Math.max(r, g, b);
-			var min = Math.min(r, g, b);
-			var hue, saturation;
-			var lightness = (min + max) / 2.0;
-
-			if (min === max) {
-				hue = 0;
-				saturation = 0;
-			} else {
-				var delta = max - min;
-				saturation = lightness <= 0.5 ? delta / (max + min) : delta / (2 - max - min);
-
-				switch (max) {
-					case r:
-						hue = (g - b) / delta + (g < b ? 6 : 0);
-						break;
-
-					case g:
-						hue = (b - r) / delta + 2;
-						break;
-
-					case b:
-						hue = (r - g) / delta + 4;
-						break;
-				}
-
-				hue /= 6;
-			}
-
-			target.h = hue;
-			target.s = saturation;
-			target.l = lightness;
-			return target;
-		};
-
-		_proto.getStyle = function getStyle() {
-			return 'rgb(' + (this.r * 255 | 0) + ',' + (this.g * 255 | 0) + ',' + (this.b * 255 | 0) + ')';
-		};
-
-		_proto.offsetHSL = function offsetHSL(h, s, l) {
-			this.getHSL(_hslA);
-			_hslA.h += h;
-			_hslA.s += s;
-			_hslA.l += l;
-			this.setHSL(_hslA.h, _hslA.s, _hslA.l);
-			return this;
-		};
-
-		_proto.add = function add(color) {
-			this.r += color.r;
-			this.g += color.g;
-			this.b += color.b;
-			return this;
-		};
-
-		_proto.addColors = function addColors(color1, color2) {
-			this.r = color1.r + color2.r;
-			this.g = color1.g + color2.g;
-			this.b = color1.b + color2.b;
-			return this;
-		};
-
-		_proto.addScalar = function addScalar(s) {
-			this.r += s;
-			this.g += s;
-			this.b += s;
-			return this;
-		};
-
-		_proto.sub = function sub(color) {
-			this.r = Math.max(0, this.r - color.r);
-			this.g = Math.max(0, this.g - color.g);
-			this.b = Math.max(0, this.b - color.b);
-			return this;
-		};
-
-		_proto.multiply = function multiply(color) {
-			this.r *= color.r;
-			this.g *= color.g;
-			this.b *= color.b;
-			return this;
-		};
-
-		_proto.multiplyScalar = function multiplyScalar(s) {
-			this.r *= s;
-			this.g *= s;
-			this.b *= s;
-			return this;
-		};
-
-		_proto.lerp = function lerp(color, alpha) {
-			this.r += (color.r - this.r) * alpha;
-			this.g += (color.g - this.g) * alpha;
-			this.b += (color.b - this.b) * alpha;
-			return this;
-		};
-
-		_proto.lerpHSL = function lerpHSL(color, alpha) {
-			this.getHSL(_hslA);
-			color.getHSL(_hslB);
-			var h = MathUtils.lerp(_hslA.h, _hslB.h, alpha);
-			var s = MathUtils.lerp(_hslA.s, _hslB.s, alpha);
-			var l = MathUtils.lerp(_hslA.l, _hslB.l, alpha);
-			this.setHSL(h, s, l);
-			return this;
-		};
-
-		_proto.equals = function equals(c) {
-			return c.r === this.r && c.g === this.g && c.b === this.b;
-		};
-
-		_proto.fromArray = function fromArray(array, offset) {
-			if (offset === undefined) offset = 0;
-			this.r = array[offset];
-			this.g = array[offset + 1];
-			this.b = array[offset + 2];
-			return this;
-		};
-
-		_proto.toArray = function toArray(array, offset) {
-			if (array === undefined) array = [];
-			if (offset === undefined) offset = 0;
-			array[offset] = this.r;
-			array[offset + 1] = this.g;
-			array[offset + 2] = this.b;
-			return array;
-		};
-
-		_proto.fromBufferAttribute = function fromBufferAttribute(attribute, index) {
-			this.r = attribute.getX(index);
-			this.g = attribute.getY(index);
-			this.b = attribute.getZ(index);
-
-			if (attribute.normalized === true) {
-				// assuming Uint8Array
-				this.r /= 255;
-				this.g /= 255;
-				this.b /= 255;
-			}
-
-			return this;
-		};
-
-		_proto.toJSON = function toJSON() {
-			return this.getHex();
-		};
-
-		return Color;
-	}();
-
-	Color.NAMES = _colorKeywords;
-	Color.prototype.r = 1;
-	Color.prototype.g = 1;
-	Color.prototype.b = 1;
-
 	/**
 	 * Port from https://github.com/mapbox/earcut (v2.2.2)
 	 */
@@ -5207,21 +5888,30 @@
 
 	exports.ArcCurve = ArcCurve;
 	exports.CatmullRomCurve3 = CatmullRomCurve3;
+	exports.Color = Color;
 	exports.CubicBezierCurve = CubicBezierCurve;
 	exports.CubicBezierCurve3 = CubicBezierCurve3;
 	exports.Curve = Curve;
 	exports.CurvePath = CurvePath;
+	exports.Cylindrical = Cylindrical;
 	exports.EllipseCurve = EllipseCurve;
+	exports.Euler = Euler;
 	exports.Font = Font;
 	exports.LineCurve = LineCurve;
 	exports.LineCurve3 = LineCurve3;
+	exports.Matrix3 = Matrix3;
+	exports.Matrix4 = Matrix4;
 	exports.Path = Path;
 	exports.QuadraticBezierCurve = QuadraticBezierCurve;
 	exports.QuadraticBezierCurve3 = QuadraticBezierCurve3;
+	exports.Quaternion = Quaternion;
 	exports.Shape = Shape;
 	exports.ShapePath = ShapePath;
 	exports.ShapeUtils = ShapeUtils;
+	exports.Spherical = Spherical;
 	exports.SplineCurve = SplineCurve;
+	exports.Vector2 = Vector2;
+	exports.Vector3 = Vector3;
 
 	Object.defineProperty(exports, '__esModule', { value: true });
 
