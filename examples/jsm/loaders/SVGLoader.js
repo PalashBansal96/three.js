@@ -1,4 +1,5 @@
 import {
+	ExtrudeBufferGeometry,
 	BufferGeometry,
 	FileLoader,
 	Float32BufferAttribute,
@@ -1451,7 +1452,7 @@ SVGLoader.getStrokeStyle = function ( width, color, lineJoin, lineCap, miterLimi
 
 };
 
-SVGLoader.pointsToStroke = function ( points, style, arcDivisions, minDistance ) {
+SVGLoader.pointsToStroke = function ( points, style, arcDivisions, minDistance, extrude = false, extrudeOptions = null ) {
 
 	// Generates a stroke with some witdh around the given path.
 	// The path can be open or closed (last point equals to first point)
@@ -1462,8 +1463,8 @@ SVGLoader.pointsToStroke = function ( points, style, arcDivisions, minDistance )
 	// Returns BufferGeometry with stroke triangles (In plane z = 0). UV coordinates are generated ('u' along path. 'v' across it, from left to right)
 
 	var vertices = [];
-	var normals = [];
-	var uvs = [];
+	var normals = extrude ? undefined : [];
+	var uvs = extrude ? undefined : [];
 
 	if ( SVGLoader.pointsToStrokeWithBuffers( points, style, arcDivisions, minDistance, vertices, normals, uvs ) === 0 ) {
 
@@ -1471,10 +1472,36 @@ SVGLoader.pointsToStroke = function ( points, style, arcDivisions, minDistance )
 
 	}
 
-	var geometry = new BufferGeometry();
-	geometry.setAttribute( 'position', new Float32BufferAttribute( vertices, 3 ) );
-	geometry.setAttribute( 'normal', new Float32BufferAttribute( normals, 3 ) );
-	geometry.setAttribute( 'uv', new Float32BufferAttribute( uvs, 2 ) );
+	var geometry;
+
+	if (extrude){
+
+		var vs = [];
+		var faces = [];
+
+		for (var i = 0, l = vertices.length; i < l ; i+=3) {
+
+			vs.push(new Vector2(vertices[i], vertices[i+1]));
+
+			if(i < l/3) faces.push([i, i+1, i+2]);
+
+		}
+
+		extrudeOptions = Object.assign({depth: 16, steps: 2}, extrudeOptions);
+		extrudeOptions.triangulated = true;
+		extrudeOptions.bevelEnabled = false;
+		geometry = new ExtrudeBufferGeometry({
+			vertices: vs, faces: faces, holes: [],
+		}, extrudeOptions);
+
+	} else {
+
+		geometry = new BufferGeometry();
+		geometry.setAttribute( 'position', new Float32BufferAttribute( vertices, 3 ) );
+		geometry.setAttribute( 'normal', new Float32BufferAttribute( normals, 3 ) );
+		geometry.setAttribute( 'uv', new Float32BufferAttribute( uvs, 2 ) );
+
+	}
 
 	return geometry;
 

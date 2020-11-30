@@ -35,6 +35,7 @@ export interface ExtrudeGeometryOptions {
 	 */
 	bevelSegments?: number;
 	extrudePath?: Curve<Vector3>;
+	triangulated?: boolean;
 	UVGenerator?: UVGenerator;
 }
 

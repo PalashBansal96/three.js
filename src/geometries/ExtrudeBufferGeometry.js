@@ -15,6 +15,8 @@
  *
  *  extrudePath: <THREE.Curve> // curve to extrude shape along
  *
+ *  triangulated: <bool> // use already list of triangulated vertices, faces and holes instead of Mesh
+ *
  *  UVGenerator: <Object> // object that provides UV generator functions
  *
  * }
@@ -80,6 +82,9 @@ class ExtrudeBufferGeometry extends BufferGeometry {
 
 			const extrudePath = options.extrudePath;
 
+			const triangulated = options.triangulated !== undefined ? options.triangulated : false;
+			if ( triangulated ) bevelEnabled = false;
+
 			const uvgen = options.UVGenerator !== undefined ? options.UVGenerator : WorldUVGenerator;
 
 			// deprecated options
@@ -130,35 +135,49 @@ class ExtrudeBufferGeometry extends BufferGeometry {
 
 			// Variables initialization
 
-			const shapePoints = shape.extractPoints( curveSegments );
+			let vertices;
+			let faces;
+			let holes;
 
-			let vertices = shapePoints.shape;
-			const holes = shapePoints.holes;
+			if ( triangulated ) {
 
-			const reverse = ! ShapeUtils.isClockWise( vertices );
+				vertices = shape.vertices;
+				faces = shape.faces;
+				holes = shape.holes;
 
-			if ( reverse ) {
+			} else {
 
-				vertices = vertices.reverse();
+				const shapePoints = shape.extractPoints( curveSegments );
 
-				// Maybe we should also check if holes are in the opposite direction, just to be safe ...
+				vertices = shapePoints.shape;
+				holes = shapePoints.holes;
 
-				for ( let h = 0, hl = holes.length; h < hl; h ++ ) {
+				const reverse = ! ShapeUtils.isClockWise( vertices );
 
-					const ahole = holes[ h ];
+				if ( reverse ) {
 
-					if ( ShapeUtils.isClockWise( ahole ) ) {
+					vertices = vertices.reverse();
 
-						holes[ h ] = ahole.reverse();
+					// Maybe we should also check if holes are in the opposite direction, just to be safe ...
+
+					for ( let h = 0, hl = holes.length; h < hl; h ++ ) {
+
+						const ahole = holes[ h ];
+
+						if ( ShapeUtils.isClockWise( ahole ) ) {
+
+							holes[ h ] = ahole.reverse();
+
+						}
 
 					}
 
 				}
 
+
+				faces = ShapeUtils.triangulateShape( vertices, holes );
+
 			}
-
-
-			const faces = ShapeUtils.triangulateShape( vertices, holes );
 
 			/* Vertices */
 
@@ -594,6 +613,7 @@ class ExtrudeBufferGeometry extends BufferGeometry {
 
 					const j = i;
 					let k = i - 1;
+					if ( k < 0 && triangulated ) continue;
 					if ( k < 0 ) k = contour.length - 1;
 
 					//console.log('b', i,j, i-1, k,vertices.length);
