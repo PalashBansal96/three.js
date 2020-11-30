@@ -1460,11 +1460,13 @@ SVGLoader.pointsToStroke = function ( points, style, arcDivisions, minDistance, 
 	// Param style: Object with SVG properties as returned by SVGLoader.getStrokeStyle(), or SVGLoader.parse() in the path.userData.style object
 	// Params arcDivisions: Arc divisions for round joins and endcaps. (Optional)
 	// Param minDistance: Points closer to this distance will be merged. (Optional)
+	// Param extrude: Extrude path. No UV or normals support in extruded geometry (Optional)
+	// Param extrudeOptions: Supported - depth, steps, same as ExtrudeGeometryOptions (Optional)
 	// Returns BufferGeometry with stroke triangles (In plane z = 0). UV coordinates are generated ('u' along path. 'v' across it, from left to right)
 
-	var vertices = [];
-	var normals = extrude ? undefined : [];
-	var uvs = extrude ? undefined : [];
+	const vertices = [];
+	const normals = extrude ? undefined : [];
+	const uvs = extrude ? undefined : [];
 
 	if ( SVGLoader.pointsToStrokeWithBuffers( points, style, arcDivisions, minDistance, vertices, normals, uvs ) === 0 ) {
 
@@ -1472,34 +1474,80 @@ SVGLoader.pointsToStroke = function ( points, style, arcDivisions, minDistance, 
 
 	}
 
-	var geometry;
+	let geometry;
 
-	if (extrude){
+	if (!extrude) {
 
-		var vs = [];
-		var faces = [];
+		geometry = new BufferGeometry();
+		geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3));
+		geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3));
+		geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
 
-		for (var i = 0, l = vertices.length; i < l ; i+=3) {
+	}
+	else {
 
-			vs.push(new Vector2(vertices[i], vertices[i+1]));
+		const options = {depth: 16, steps: 2};
+		if (extrudeOptions) Object.assign(options, extrudeOptions);
 
-			if(i < l/3) faces.push([i, i+1, i+2]);
+		const indices = [];
+		const steps = extrudeOptions.steps;
+		const vlen = vertices.length;
+		const flen = vlen/3;
+
+		// Add stepped vertices...
+		// Including front facing vertices
+		for ( let s = 1; s <= steps; s ++ ) {
+
+			for ( let i = 0; i < vlen; i += 3 ) {
+
+				vertices.push( vertices[ i ], vertices[ i+1 ], options.depth / steps * s );
+
+			}
 
 		}
 
-		extrudeOptions = Object.assign({depth: 16, steps: 2}, extrudeOptions);
-		extrudeOptions.triangulated = true;
-		extrudeOptions.bevelEnabled = false;
-		geometry = new ExtrudeBufferGeometry({
-			vertices: vs, faces: faces, holes: [],
-		}, extrudeOptions);
+		// Bottom faces
+		for ( let i = 0; i < flen; i += 3 ) {
 
-	} else {
+			indices.push(i + 2, i + 1, i);
+
+		}
+
+		// Front faces
+		for ( let i = 0; i < flen; i += 3 ) {
+
+			indices.push(i + flen * steps, i + 1 + flen * steps, i + 2 + flen * steps);
+
+		}
+
+		// Side wall faces
+		let i = flen;
+
+		while ( -- i > 0 ) {
+
+			const j = i;
+			let k = i - 1;
+
+			for ( let s = 0, sl = ( steps ); s < sl; s ++ ) {
+
+				const slen1 = flen * s;
+				const slen2 = flen * ( s + 1 );
+
+				const a = j + slen1,
+					b = k + slen1,
+					c = k + slen2,
+					d = j + slen2;
+
+				indices.push(a, b, d);
+				indices.push(b, c, d);
+
+			}
+
+		}
 
 		geometry = new BufferGeometry();
 		geometry.setAttribute( 'position', new Float32BufferAttribute( vertices, 3 ) );
-		geometry.setAttribute( 'normal', new Float32BufferAttribute( normals, 3 ) );
-		geometry.setAttribute( 'uv', new Float32BufferAttribute( uvs, 2 ) );
+		geometry.setIndex( indices );
 
 	}
 
