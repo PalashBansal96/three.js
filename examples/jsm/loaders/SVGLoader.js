@@ -1490,7 +1490,7 @@ SVGLoader.pointsToStroke = function ( points, style, arcDivisions, minDistance, 
 		if (extrudeOptions) Object.assign(options, extrudeOptions);
 
 		const indices = [];
-		const steps = extrudeOptions.steps;
+		const steps = options.steps;
 		const vlen = vertices.length;
 		const flen = vlen/3;
 
