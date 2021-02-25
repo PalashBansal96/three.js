@@ -42,7 +42,7 @@ void main() {
 
 	// accumulation (baked indirect lighting only)
 	#ifdef USE_LIGHTMAP
-	
+
 		vec4 lightMapTexel= texture2D( lightMap, vUv2 );
 		reflectedLight.indirectDiffuse += lightMapTexelToLinear( lightMapTexel ).rgb * lightMapIntensity;
 
@@ -62,6 +62,13 @@ void main() {
 	#include <envmap_fragment>
 
 	gl_FragColor = vec4( outgoingLight, diffuseColor.a );
+
+	#if ( defined( USE_UV ))
+
+	gl_FragColor = vec4( vUv.xy, 0., 1. );
+
+	#endif
+
 
 	#include <tonemapping_fragment>
 	#include <encodings_fragment>
