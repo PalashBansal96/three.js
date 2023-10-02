@@ -3000,6 +3000,13 @@ class GLTFMeshGpuInstancing {
 		const quaternion = new Quaternion();
 		const scale = new Vector3();
 
+		let hasPosition = false;
+		let hasRotation = false;
+		let hasScale = false;
+
+		const iQuat = new Quaternion();
+		const iScale = new Vector3( 1, 1, 1 );
+
 		for ( let i = 0; i < mesh.count; i ++ ) {
 
 			mesh.getMatrixAt( i, matrix );
@@ -3009,16 +3016,19 @@ class GLTFMeshGpuInstancing {
 			quaternion.toArray( rotationAttr, i * 4 );
 			scale.toArray( scaleAttr, i * 3 );
 
+			if ( ! hasPosition && position.lengthSq() > 0 ) hasPosition = true;
+			if ( ! hasRotation && ! quaternion.equals( iQuat ) ) hasRotation = true;
+			if ( ! hasScale && ! scale.equals( iScale ) ) hasScale = true;
+
 		}
 
-		const attributes = {
-			TRANSLATION: writer.processAccessor( new BufferAttribute( translationAttr, 3 ) ),
-			ROTATION: writer.processAccessor( new BufferAttribute( rotationAttr, 4 ) ),
-			SCALE: writer.processAccessor( new BufferAttribute( scaleAttr, 3 ) ),
-		};
+		const attributes = {};
 
-		if ( mesh.instanceColor )
-			attributes._COLOR_0 = writer.processAccessor( mesh.instanceColor );
+		if ( hasPosition ) attributes.TRANSLATION = writer.processAccessor( new BufferAttribute( translationAttr, 3 ) );
+		if ( hasRotation ) attributes.ROTATION = writer.processAccessor( new BufferAttribute( rotationAttr, 4 ) );
+		if ( hasScale ) attributes.SCALE = writer.processAccessor( new BufferAttribute( scaleAttr, 3 ) );
+
+		if ( mesh.instanceColor ) attributes._COLOR_0 = writer.processAccessor( mesh.instanceColor );
 
 		nodeDef.extensions = nodeDef.extensions || {};
 		nodeDef.extensions[ this.name ] = { attributes };
