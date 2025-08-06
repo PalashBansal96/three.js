@@ -1556,7 +1556,7 @@ class WebGLRenderer {
 			renderStateStack.push( currentRenderState );
 
 			_projScreenMatrix.multiplyMatrices( camera.projectionMatrix, camera.matrixWorldInverse );
-			_frustum.setFromProjectionMatrix( _projScreenMatrix );
+			_frustum.setFromProjectionMatrix( _projScreenMatrix, WebGLCoordinateSystem, camera.reversedDepth );
 
 			_localClippingEnabled = this.localClippingEnabled;
 			_clippingEnabled = clipping.init( this.clippingPlanes, _localClippingEnabled );
@@ -2383,7 +2383,7 @@ class WebGLRenderer {
 
 				if ( reversedDepthBuffer && camera.reversedDepth !== true ) {
 
-					camera.reversedDepth = true;
+					camera._reversedDepth = true;
 					camera.updateProjectionMatrix();
 
 				}
@@ -3295,15 +3295,6 @@ class WebGLRenderer {
 			}
 
 			state.unbindTexture();
-
-		};
-
-		this.copyTextureToTexture3D = function ( srcTexture, dstTexture, srcRegion = null, dstPosition = null, level = 0 ) {
-
-			// @deprecated, r170
-			warnOnce( 'WebGLRenderer: copyTextureToTexture3D function has been deprecated. Use "copyTextureToTexture" instead.' );
-
-			return this.copyTextureToTexture( srcTexture, dstTexture, srcRegion, dstPosition, level );
 
 		};
 

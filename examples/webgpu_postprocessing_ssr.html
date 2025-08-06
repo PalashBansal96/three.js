@@ -31,8 +31,8 @@
 
 	<script type="module">
 
-		import * as THREE from 'three';
-		import { pass, mrt, output, normalView, metalness, blendColor, screenUV, color, sample, directionToColor, colorToDirection } from 'three/tsl';
+		import * as THREE from 'three/webgpu';
+		import { pass, mrt, output, normalView, metalness, roughness, blendColor, screenUV, color, sample, directionToColor, colorToDirection, vec2 } from 'three/tsl';
 		import { ssr } from 'three/addons/tsl/display/SSRNode.js';
 		import { smaa } from 'three/addons/tsl/display/SMAANode.js';
 
@@ -44,6 +44,7 @@
 		import Stats from 'three/addons/libs/stats.module.js';
 
 		const params = {
+			quality: 0.5,
 			maxDistance: 0.5,
 			opacity: 1,
 			thickness: 0.015,
@@ -74,6 +75,12 @@
 				gltf.scene.traverse( function ( object ) {
 
 					if ( object.material ) {
+
+						if ( object.material.name === 'Lense_Casing' ) {
+
+							object.material.transparent = true;
+
+						}
 
 						// Avoid overdrawing
 						object.material.side = THREE.FrontSide;
@@ -113,21 +120,21 @@
 			scenePass.setMRT( mrt( {
 				output: output,
 				normal: directionToColor( normalView ),
-				metalness: metalness
+				metalrough: vec2( metalness, roughness )
 			} ) );
 
 			const scenePassColor = scenePass.getTextureNode( 'output' );
 			const scenePassNormal = scenePass.getTextureNode( 'normal' );
 			const scenePassDepth = scenePass.getTextureNode( 'depth' );
-			const scenePassMetalness = scenePass.getTextureNode( 'metalness' );
+			const scenePassMetalRough = scenePass.getTextureNode( 'metalrough' );
 
 			// optimization bandwidth packing the normals and reducing the texture precision if possible
 
-			const metalnessTexture = scenePass.getTexture( 'metalness' );
-			metalnessTexture.type = THREE.UnsignedByteType;
-
 			const normalTexture = scenePass.getTexture( 'normal' );
 			normalTexture.type = THREE.UnsignedByteType;
+
+			const metalRoughTexture = scenePass.getTexture( 'metalrough' );
+			metalRoughTexture.type = THREE.UnsignedByteType;
 
 			const customNormal = sample( ( uv ) => {
 
@@ -135,15 +142,20 @@
 
 			} );
 
+			const customMetalness = sample( ( uv ) => {
+
+				return scenePassMetalRough.sample( uv ).r;
+
+			} );
+
 			//
 
-			ssrPass = ssr( scenePassColor, scenePassDepth, customNormal, scenePassMetalness, camera );
-			ssrPass.resolutionScale = 1.0;
+			ssrPass = ssr( scenePassColor, scenePassDepth, customNormal, customMetalness, camera );
 
 			// blend SSR over beauty
-		
-			const outputNode = smaa( blendColor( scenePassColor, ssrPass ) );
 
+			const outputNode = smaa( blendColor( scenePassColor, ssrPass.mul( scenePassMetalRough.g.oneMinus() ) ) );
+		
 			postProcessing.outputNode = outputNode;
 
 			//
@@ -162,6 +174,7 @@
 			// GUI
 
 			gui = new GUI();
+			gui.add( params, 'quality' ).min( 0 ).max( 1 ).onChange( updateParameters );
 			gui.add( params, 'maxDistance' ).min( 0 ).max( 1 ).onChange( updateParameters );
 			gui.add( params, 'opacity' ).min( 0 ).max( 1 ).onChange( updateParameters );
 			gui.add( params, 'thickness' ).min( 0 ).max( 0.05 ).onChange( updateParameters );
@@ -187,6 +200,7 @@
 
 		function updateParameters() {
 
+			ssrPass.quality.value = params.quality;
 			ssrPass.maxDistance.value = params.maxDistance;
 			ssrPass.opacity.value = params.opacity;
 			ssrPass.thickness.value = params.thickness;

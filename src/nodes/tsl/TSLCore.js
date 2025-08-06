@@ -396,8 +396,68 @@ class ShaderCallNodeInternal extends Node {
 
 		} else {
 
+			let inputs = inputNodes;
+
+			if ( Array.isArray( inputs ) ) {
+
+				// If inputs is an array, we need to convert it to a Proxy
+				// so we can call TSL functions using the syntax `Fn( ( { r, g, b } ) => { ... } )`
+				// and call through `fn( 0, 1, 0 )` or `fn( { r: 0, g: 1, b: 0 } )`
+
+				let index = 0;
+
+				inputs = new Proxy( inputs, {
+
+					get: ( target, property, receiver ) => {
+
+						let value;
+
+						if ( target[ property ] === undefined ) {
+
+							value = target[ index ++ ];
+
+						} else {
+
+							value = Reflect.get( target, property, receiver );
+
+						}
+
+						return value;
+
+					}
+
+				} );
+
+			}
+
+			const secureNodeBuilder = new Proxy( builder, {
+
+				get: ( target, property, receiver ) => {
+
+					let value;
+
+					if ( Symbol.iterator === property ) {
+
+						value = function* () {
+
+							yield undefined;
+
+						};
+
+					} else {
+
+						value = Reflect.get( target, property, receiver );
+
+					}
+
+					return value;
+
+				}
+
+			} );
+
 			const jsFunc = shaderNode.jsFunc;
-			const outputNode = inputNodes !== null || jsFunc.length > 1 ? jsFunc( inputNodes || [], builder ) : jsFunc( builder );
+			const outputNode = inputs !== null || jsFunc.length > 1 ? jsFunc( inputs || [], secureNodeBuilder ) : jsFunc( secureNodeBuilder );
 
 			result = nodeObject( outputNode );
 
@@ -583,7 +643,25 @@ const ConvertType = function ( type, cacheMap = null ) {
 
 	return ( ...params ) => {
 
-		if ( params.length === 0 || ( ! [ 'bool', 'float', 'int', 'uint' ].includes( type ) && params.every( param => typeof param !== 'object' ) ) ) {
+		for ( const param of params ) {
+
+			if ( param === undefined ) {
+
+				console.error( `THREE.TSL: Invalid parameter for the type "${ type }".` );
+
+				return nodeObject( new ConstNode( 0, type ) );
+
+			}
+
+		}
+
+		if ( params.length === 0 || ( ! [ 'bool', 'float', 'int', 'uint' ].includes( type ) && params.every( param => {
+
+			const paramType = typeof param;
+
+			return paramType !== 'object' && paramType !== 'function';
+
+		} ) ) ) {
 
 			params = [ getValueFromType( type, ...params ) ];
 
@@ -636,88 +714,53 @@ export const nodeProxyIntent = ( NodeClass, scope = null, factor = null, setting
 
 let fnId = 0;
 
-export const Fn = ( jsFunc, layout = null ) => {
+class FnNode extends Node {
 
-	let nodeType = null;
+	constructor( jsFunc, layout = null ) {
 
-	if ( layout !== null ) {
+		super();
 
-		if ( typeof layout === 'object' ) {
+		let nodeType = null;
 
-			nodeType = layout.return;
+		if ( layout !== null ) {
 
-		} else {
+			if ( typeof layout === 'object' ) {
 
-			if ( typeof layout === 'string' ) {
-
-				nodeType = layout;
+				nodeType = layout.return;
 
 			} else {
 
-				console.error( 'THREE.TSL: Invalid layout type.' );
+				if ( typeof layout === 'string' ) {
+
+					nodeType = layout;
+
+				} else {
+
+					console.error( 'THREE.TSL: Invalid layout type.' );
+
+				}
+
+				layout = null;
 
 			}
 
-			layout = null;
+		}
+
+		this.shaderNode = new ShaderNode( jsFunc, nodeType );
+
+		if ( layout !== null ) {
+
+			this.setLayout( layout );
 
 		}
+
+		this.isFn = true;
 
 	}
 
-	const shaderNode = new ShaderNode( jsFunc, nodeType );
+	setLayout( layout ) {
 
-	const fn = ( ...params ) => {
-
-		let inputs;
-
-		nodeObjects( params );
-
-		const isArrayAsParameter = params[ 0 ] && ( params[ 0 ].isNode || Object.getPrototypeOf( params[ 0 ] ) !== Object.prototype );
-
-		if ( isArrayAsParameter ) {
-
-			inputs = [ ...params ];
-
-		} else {
-
-			inputs = params[ 0 ];
-
-		}
-
-		const fnCall = shaderNode.call( inputs );
-
-		if ( nodeType === 'void' ) fnCall.toStack();
-
-		return fnCall.toVarIntent();
-
-	};
-
-	fn.shaderNode = shaderNode;
-	fn.id = shaderNode.id;
-
-	fn.isFn = true;
-
-	fn.getNodeType = ( ...params ) => shaderNode.getNodeType( ...params );
-	fn.getCacheKey = ( ...params ) => shaderNode.getCacheKey( ...params );
-
-	fn.setLayout = ( layout ) => {
-
-		shaderNode.setLayout( layout );
-
-		return fn;
-
-	};
-
-	fn.once = ( subBuilds = null ) => {
-
-		shaderNode.once = true;
-		shaderNode.subBuilds = subBuilds;
-
-		return fn;
-
-	};
-
-	if ( layout !== null ) {
+		const nodeType = this.shaderNode.nodeType;
 
 		if ( typeof layout.inputs !== 'object' ) {
 
@@ -742,13 +785,92 @@ export const Fn = ( jsFunc, layout = null ) => {
 
 		}
 
-		fn.setLayout( layout );
+		this.shaderNode.setLayout( layout );
+
+		return this;
 
 	}
 
-	return fn;
+	getNodeType( builder ) {
 
-};
+		return this.shaderNode.getNodeType( builder ) || 'float';
+
+	}
+
+	call( ...params ) {
+
+		let inputs;
+
+		nodeObjects( params );
+
+		const isArrayAsParameter = params[ 0 ] && ( params[ 0 ].isNode || Object.getPrototypeOf( params[ 0 ] ) !== Object.prototype );
+
+		if ( isArrayAsParameter ) {
+
+			inputs = [ ...params ];
+
+		} else {
+
+			inputs = params[ 0 ];
+
+		}
+
+		const fnCall = this.shaderNode.call( inputs );
+
+		if ( this.shaderNode.nodeType === 'void' ) fnCall.toStack();
+
+		return fnCall.toVarIntent();
+
+	}
+
+	once( subBuilds = null ) {
+
+		this.shaderNode.once = true;
+		this.shaderNode.subBuilds = subBuilds;
+
+		return this;
+
+	}
+
+	generate( builder ) {
+
+		const type = this.getNodeType( builder );
+
+		console.error( 'THREE.TSL: "Fn()" was declared but not invoked. Try calling it like "Fn()( ...params )".' );
+
+		return builder.generateConst( type );
+
+	}
+
+}
+
+export function Fn( jsFunc, layout = null ) {
+
+	const instance = new FnNode( jsFunc, layout );
+
+	return new Proxy( () => {}, {
+
+		apply( target, thisArg, params ) {
+
+			return instance.call( ...params );
+
+		},
+
+		get( target, prop, receiver ) {
+
+			return Reflect.get( instance, prop, receiver );
+
+		},
+
+		set( target, prop, value, receiver ) {
+
+			return Reflect.set( instance, prop, value, receiver );
+
+		}
+
+	} );
+
+}
 
 //
 
