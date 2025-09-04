@@ -75,6 +75,32 @@
 			const iframe = document.getElementById( 'viewer' );
 			const setEditorExample = setupCodeEditor( iframe );
 			window.setEditorExample = setEditorExample;
+			window.toggleCode = () => {
+
+				document.querySelector( '.codebar' ).classList.toggle( 'closed' );
+				document.getElementById( 'panel' ).classList.toggle( 'closed' );
+				document.querySelector( '#codefiles-action-close' ).addEventListener( 'click', window.toggleCode );
+
+			};
+
+			window.addEventListener( 'keyup', ( ev ) => {
+
+				// ignore if textarea
+				if ( ev.target.id === 'filterInput' ) {
+
+					if ( ev.target.value !== '' ) return;
+
+				} else if ( ev.target.tagName === 'TEXTAREA' || ev.target.tagName === 'INPUT' ) return;
+				if ( ev.key === '.' ) {
+
+					ev.preventDefault();
+					window.toggleCode();
+
+				}
+
+			}, {
+				passive: false
+			} );
 
 		</script>
 
@@ -276,8 +302,10 @@
 
 			// Reveal "View source" button and set attributes to this example
 			viewSrcButton.style.display = '';
-			viewSrcButton.href = 'https://github.com/mrdoob/three.js/blob/master/examples/' + selected + '.html';
+			viewSrcButton.href = '#';
+			viewSrcButton.target = '';
 			viewSrcButton.title = 'View source code for ' + getName( selected ) + ' on GitHub';
+			viewSrcButton.onclick = window.toggleCode;
 
 		}
 
@@ -406,37 +434,6 @@
 			return div.firstChild;
 
 		}
-
-		window.addEventListener( 'keyup', ( ev ) => {
-
-			console.log( 'here' );
-
-			const codebar = document.querySelector( '.codebar' );
-			const panel = document.getElementById( 'panel' );
-			// ignore if textarea
-			if ( ev.target.id === 'filterInput' ) {
-
-				if ( ev.target.value !== '' ) return;
-
-			} else if ( ev.target.tagName === 'TEXTAREA' || ev.target.tagName === 'INPUT' ) return;
-			if ( ev.key === '.' ) {
-
-				ev.preventDefault();
-				codebar.classList.toggle( 'closed' );
-				panel.classList.toggle( 'closed' );
-
-			}
-
-		}, {
-			passive: false
-		} );
-
-		document.querySelector( '#codefiles-action-close' ).addEventListener( 'click', () => {
-
-			document.querySelector( '.codebar' ).classList.toggle( 'closed' );
-			document.getElementById( 'panel' ).classList.toggle( 'closed' );
-		} );
-
 
 		</script>
 		<template id="PlaceholderHTML">
