@@ -61,7 +61,7 @@
 		<iframe class="right-pane" id="viewer" name="viewer" allow="fullscreen; xr-spatial-tracking;"></iframe>
 
 		<link rel="stylesheet" href="./_index/editor/editor.css">
-		<a id="button" target="_blank"><img src="../files/ic_code_black_24dp.svg"></a>
+		<div id="button"><img src="../files/ic_code_black_24dp.svg"></div>
 		<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 		<script src="https://cdn.jsdelivr.net/npm/js-untar@2.0.0/build/dist/untar.min.js"></script>
 
@@ -75,36 +75,10 @@
 			const iframe = document.getElementById( 'viewer' );
 			const setEditorExample = setupCodeEditor( iframe );
 			window.setEditorExample = setEditorExample;
-			window.toggleCode = () => {
-
-				document.querySelector( '.codebar' ).classList.toggle( 'closed' );
-				document.getElementById( 'panel' ).classList.toggle( 'closed' );
-				document.querySelector( '#codefiles-action-close' ).addEventListener( 'click', window.toggleCode );
-
-			};
-
-			window.addEventListener( 'keyup', ( ev ) => {
-
-				// ignore if textarea
-				if ( ev.target.id === 'filterInput' ) {
-
-					if ( ev.target.value !== '' ) return;
-
-				} else if ( ev.target.tagName === 'TEXTAREA' || ev.target.tagName === 'INPUT' ) return;
-				if ( ev.key === '.' ) {
-
-					ev.preventDefault();
-					window.toggleCode();
-
-				}
-
-			}, {
-				passive: false
-			} );
 
 		</script>
 
-		<script defer>
+		<script type="module">
 
 		const panel = document.getElementById( 'panel' );
 		const content = document.getElementById( 'content' );
@@ -167,6 +141,7 @@
 					selectFile( file );
 					viewer.src = validRedirects.get( file );
 					viewer.style.display = 'unset';
+					window.setEditorExample( file + '.html' );
 
 				}
 
@@ -305,7 +280,6 @@
 			viewSrcButton.href = '#';
 			viewSrcButton.target = '';
 			viewSrcButton.title = 'View source code for ' + getName( selected ) + ' on GitHub';
-			viewSrcButton.onclick = window.toggleCode;
 
 		}
 

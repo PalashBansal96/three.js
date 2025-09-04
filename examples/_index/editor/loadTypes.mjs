@@ -1,3 +1,4 @@
+/* eslint-disable */
 /* global monaco, pako, untar */
 
 const monacoPrefix = 'file:///node_modules/'
@@ -7,8 +8,8 @@ const fileLoadState = {
     files: new Map(),
 }
 
-export function registerFile (path, text) {
-    path = monacoPrefix + path
+export function registerFile (path, text, prefix = monacoPrefix) {
+    path = prefix + path
     if(fileLoadState.files.has(path)) {
         console.warn('Replacing existing file', path, 'with new content');
     }
@@ -27,7 +28,7 @@ export function urlToUri (absUrl) {
 
 export async function loadFileFromPath (path) {
     if(fileLoadState.packages.has(path)) {
-        // const version = fileLoadState.packages.get(path).version ?? '0.0.0';
+        // const version = fileLoadState.packages.get(path).version || '0.0.0';
         // console.warn('File already loaded');
         return;
     }
@@ -40,11 +41,36 @@ export async function loadFileFromPath (path) {
     monaco.languages.typescript.typescriptDefaults.addExtraLib(file, urlToUri(path));
     monaco.languages.typescript.javascriptDefaults.addExtraLib(file, urlToUri(path));
 }
+
+const ignoredPackages = new Set([
+    'three',
+    // 'react',
+    // 'react-dom',
+    'react-reconciler',
+    '@mediapipe/tasks-vision',
+    'cross-spawn',
+    'bidi-js',
+    '@babel/runtime',
+    '@monogrid/gainmap-js',
+    'troika-three-text',
+    '@types/webxr',
+    'style-value-types',
+    'tslib',
+    'hey-listen',
+    'framesync',
+    '@types/wicg-file-system-access',
+])
+
 export function loadTypesFromTarGz (packageName, version1 = 'latest', level = 0) {
     if(packageName === 'three') {
         loadTypesFromTarGz('@types/three', 'latest', level + 1) // too big, @types/three is already there...
         return
     } // too big, @types/three is already there...
+    if(packageName.startsWith('react/')) packageName = 'react'
+    if(packageName.startsWith('react-dom')) packageName = 'react-dom'
+    if(ignoredPackages.has(packageName)) return // too big, @types/three is already there...
+    if(packageName === 'react') packageName = '@types/react'
+    if(packageName === 'react-dom') packageName = '@types/react-dom'
     // if(packageName === '@types/three' && !version1.startsWith('https')) return // dont load @types/three from npm, use the fork
 
     // console.log('Loading package', packageName, 'version', version1, 'at level', level);
@@ -92,7 +118,7 @@ export function loadTypesFromTarGz (packageName, version1 = 'latest', level = 0)
             const cached = await cache.match(cacheKey);
             if(cached) files = await cached.arrayBuffer().then(buf => untar(buf));
             else {
-                console.log('cache miss')
+                // console.log('cache miss')
                 const buffer = await fetch(tarball).then(r => r.arrayBuffer())
                 const decompressed = pako.inflate(buffer);
                 await cache.put(cacheKey, new Response(decompressed.buffer));
