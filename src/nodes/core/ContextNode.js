@@ -1,5 +1,6 @@
 import Node from './Node.js';
 import { addMethodChaining, nodeProxy } from '../tsl/TSLCore.js';
+import { warn } from '../../utils.js';
 
 /**
  * This node can be used as a context management component for another node.
@@ -75,6 +76,19 @@ class ContextNode extends Node {
 	getNodeType( builder ) {
 
 		return this.node.getNodeType( builder );
+
+	}
+
+	/**
+	 * This method is overwritten to ensure it returns the member type of {@link ContextNode#node}.
+	 *
+	 * @param {NodeBuilder} builder - The current node builder.
+	 * @param {string} name - The member name.
+	 * @returns {string} The member type.
+	 */
+	getMemberType( builder, name ) {
+
+		return this.node.getMemberType( builder, name );
 
 	}
 
@@ -164,7 +178,7 @@ export const setName = ( node, name ) => context( node, { nodeName: name } );
  */
 export function label( node, name ) {
 
-	console.warn( 'THREE.TSL: "label()" has been deprecated. Use "setName()" instead.' ); // @deprecated r179
+	warn( 'TSL: "label()" has been deprecated. Use "setName()" instead.' ); // @deprecated r179
 
 	return setName( node, name );
 

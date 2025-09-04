@@ -28,11 +28,11 @@
 		<script type="module">
 
 			import * as THREE from 'three/webgpu';
-			import { If, PI2, atan, color, frontFacing, output, positionLocal, Fn, uniform, vec4 } from 'three/tsl';
+			import { If, TWO_PI, atan, color, frontFacing, output, positionLocal, Fn, uniform, vec4 } from 'three/tsl';
 
 			import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 			import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-			import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+			import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 			import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 			import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
@@ -51,8 +51,8 @@
 
 				// environment
 
-				const rgbeLoader = new RGBELoader();
-				rgbeLoader.load( './textures/equirectangular/royal_esplanade_1k.hdr', ( environmentMap ) => {
+				const hdrLoader = new HDRLoader();
+				hdrLoader.load( './textures/equirectangular/royal_esplanade_1k.hdr', ( environmentMap ) => {
 
 					environmentMap.mapping = THREE.EquirectangularReflectionMapping;
 
@@ -80,7 +80,7 @@
 			
 				const inAngle = Fn( ( [ position, angleStart, angleArc ] ) => {
 
-					const angle = atan( position.y, position.x ).sub( angleStart ).mod( PI2 ).toVar();
+					const angle = atan( position.y, position.x ).sub( angleStart ).mod( TWO_PI ).toVar();
 					return angle.greaterThan( 0 ).and( angle.lessThan( angleArc ) );
 
 				} );

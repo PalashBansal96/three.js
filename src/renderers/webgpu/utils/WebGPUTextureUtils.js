@@ -13,11 +13,13 @@ import {
 	RGBAFormat, RGBFormat, RedFormat, RGFormat, RGBA_S3TC_DXT1_Format, RGBA_S3TC_DXT3_Format, RGBA_S3TC_DXT5_Format, UnsignedByteType, FloatType, HalfFloatType, SRGBTransfer, DepthFormat, DepthStencilFormat,
 	RGBA_ASTC_4x4_Format, RGBA_ASTC_5x4_Format, RGBA_ASTC_5x5_Format, RGBA_ASTC_6x5_Format, RGBA_ASTC_6x6_Format, RGBA_ASTC_8x5_Format, RGBA_ASTC_8x6_Format, RGBA_ASTC_8x8_Format, RGBA_ASTC_10x5_Format,
 	RGBA_ASTC_10x6_Format, RGBA_ASTC_10x8_Format, RGBA_ASTC_10x10_Format, RGBA_ASTC_12x10_Format, RGBA_ASTC_12x12_Format, UnsignedIntType, UnsignedShortType, UnsignedInt248Type, UnsignedInt5999Type,
-	NeverCompare, AlwaysCompare, LessCompare, LessEqualCompare, EqualCompare, GreaterEqualCompare, GreaterCompare, NotEqualCompare, IntType, RedIntegerFormat, RGIntegerFormat, RGBAIntegerFormat
+	NeverCompare, AlwaysCompare, LessCompare, LessEqualCompare, EqualCompare, GreaterEqualCompare, GreaterCompare, NotEqualCompare, IntType, RedIntegerFormat, RGIntegerFormat, RGBAIntegerFormat,
+	UnsignedInt101111Type, RGBA_BPTC_Format, RGB_ETC1_Format, RGB_S3TC_DXT1_Format, RED_RGTC1_Format, SIGNED_RED_RGTC1_Format, RED_GREEN_RGTC2_Format, SIGNED_RED_GREEN_RGTC2_Format
 } from '../../../constants.js';
 import { CubeTexture } from '../../../textures/CubeTexture.js';
 import { DepthTexture } from '../../../textures/DepthTexture.js';
 import { Texture } from '../../../textures/Texture.js';
+import { warn, error } from '../../../utils.js';
 
 const _compareToWebGPU = {
 	[ NeverCompare ]: 'never',
@@ -186,6 +188,15 @@ class WebGPUTextureUtils {
 
 		}
 
+		if ( texture.isExternalTexture ) {
+
+			textureData.texture = texture.sourceTexture;
+			textureData.initialized = true;
+
+			return;
+
+		}
+
 		if ( options.needsMipmaps === undefined ) options.needsMipmaps = false;
 		if ( options.levels === undefined ) options.levels = 1;
 		if ( options.depth === undefined ) options.depth = 1;
@@ -221,7 +232,7 @@ class WebGPUTextureUtils {
 
 		}
 
-		if ( texture.isCompressedTexture !== true && texture.isCompressedArrayTexture !== true ) {
+		if ( texture.isCompressedTexture !== true && texture.isCompressedArrayTexture !== true && format !== GPUTextureFormat.RGB9E5UFloat ) {
 
 			usage |= GPUTextureUsage.RENDER_ATTACHMENT;
 
@@ -245,7 +256,7 @@ class WebGPUTextureUtils {
 
 		if ( format === undefined ) {
 
-			console.warn( 'WebGPURenderer: Texture format not supported.' );
+			warn( 'WebGPURenderer: Texture format not supported.' );
 
 			this.createDefaultTexture( texture );
 			return;
@@ -433,6 +444,7 @@ class WebGPUTextureUtils {
 	updateTexture( texture, options ) {
 
 		const textureData = this.backend.get( texture );
+		const mipmaps = texture.mipmaps;
 
 		const { textureDescriptorGPU } = textureData;
 
@@ -443,7 +455,22 @@ class WebGPUTextureUtils {
 
 		if ( texture.isDataTexture ) {
 
-			this._copyBufferToTexture( options.image, textureData.texture, textureDescriptorGPU, 0, texture.flipY );
+			if ( mipmaps.length > 0 ) {
+
+				for ( let i = 0, il = mipmaps.length; i < il; i ++ ) {
+
+					const mipmap = mipmaps[ i ];
+
+					this._copyBufferToTexture( mipmap, textureData.texture, textureDescriptorGPU, 0, texture.flipY, 0, i );
+
+				}
+
+
+			} else {
+
+				this._copyBufferToTexture( options.image, textureData.texture, textureDescriptorGPU, 0, texture.flipY );
+
+			}
 
 		} else if ( texture.isArrayTexture || texture.isDataArrayTexture || texture.isData3DTexture ) {
 
@@ -459,19 +486,32 @@ class WebGPUTextureUtils {
 
 		} else if ( texture.isCubeTexture ) {
 
-			this._copyCubeMapToTexture( options.images, textureData.texture, textureDescriptorGPU, texture.flipY, texture.premultiplyAlpha );
+			this._copyCubeMapToTexture( texture, textureData.texture, textureDescriptorGPU );
 
 		} else {
 
-			this._copyImageToTexture( options.image, textureData.texture, textureDescriptorGPU, 0, texture.flipY, texture.premultiplyAlpha );
+			if ( mipmaps.length > 0 ) {
+
+				for ( let i = 0, il = mipmaps.length; i < il; i ++ ) {
+
+					const mipmap = mipmaps[ i ];
+
+					this._copyImageToTexture( mipmap, textureData.texture, textureDescriptorGPU, 0, texture.flipY, texture.premultiplyAlpha, i );
+
+				}
+
+
+			} else {
+
+				this._copyImageToTexture( options.image, textureData.texture, textureDescriptorGPU, 0, texture.flipY, texture.premultiplyAlpha );
+
+			}
 
 		}
 
 		//
 
 		textureData.version = texture.version;
-
-		if ( texture.onUpdate ) texture.onUpdate( texture );
 
 	}
 
@@ -501,7 +541,7 @@ class WebGPUTextureUtils {
 
 		const readBuffer = device.createBuffer(
 			{
-				size: width * height * bytesPerTexel,
+				size: ( ( height - 1 ) * bytesPerRow ) + ( width * bytesPerTexel ), // see https://github.com/mrdoob/three.js/issues/31658#issuecomment-3229442010
 				usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
 			}
 		);
@@ -594,27 +634,46 @@ class WebGPUTextureUtils {
 	 * Uploads cube texture image data to the GPU memory.
 	 *
 	 * @private
-	 * @param {Array} images - The cube image data.
+	 * @param {CubeTexture} texture - The cube texture.
 	 * @param {GPUTexture} textureGPU - The GPU texture.
 	 * @param {Object} textureDescriptorGPU - The GPU texture descriptor.
-	 * @param {boolean} flipY - Whether to flip texture data along their vertical axis or not.
-	 * @param {boolean} premultiplyAlpha - Whether the texture should have its RGB channels premultiplied by the alpha channel or not.
 	 */
-	_copyCubeMapToTexture( images, textureGPU, textureDescriptorGPU, flipY, premultiplyAlpha ) {
+	_copyCubeMapToTexture( texture, textureGPU, textureDescriptorGPU ) {
+
+		const images = texture.images;
+		const mipmaps = texture.mipmaps;
 
 		for ( let i = 0; i < 6; i ++ ) {
 
 			const image = images[ i ];
 
-			const flipIndex = flipY === true ? _flipMap[ i ] : i;
+			const flipIndex = texture.flipY === true ? _flipMap[ i ] : i;
 
 			if ( image.isDataTexture ) {
 
-				this._copyBufferToTexture( image.image, textureGPU, textureDescriptorGPU, flipIndex, flipY );
+				this._copyBufferToTexture( image.image, textureGPU, textureDescriptorGPU, flipIndex, texture.flipY );
 
 			} else {
 
-				this._copyImageToTexture( image, textureGPU, textureDescriptorGPU, flipIndex, flipY, premultiplyAlpha );
+				this._copyImageToTexture( image, textureGPU, textureDescriptorGPU, flipIndex, texture.flipY, texture.premultiplyAlpha );
+
+			}
+
+			for ( let j = 0; j < mipmaps.length; j ++ ) {
+
+				const mipmap = mipmaps[ j ];
+				const image = mipmap.images[ i ];
+
+				if ( image.isDataTexture ) {
+
+					this._copyBufferToTexture( image.image, textureGPU, textureDescriptorGPU, flipIndex, texture.flipY, 0, j + 1 );
+
+				} else {
+
+					this._copyImageToTexture( image, textureGPU, textureDescriptorGPU, flipIndex, texture.flipY, texture.premultiplyAlpha, j + 1 );
+
+				}
+
 
 			}
 
@@ -632,10 +691,14 @@ class WebGPUTextureUtils {
 	 * @param {number} originDepth - The origin depth.
 	 * @param {boolean} flipY - Whether to flip texture data along their vertical axis or not.
 	 * @param {boolean} premultiplyAlpha - Whether the texture should have its RGB channels premultiplied by the alpha channel or not.
+	 * @param {number} [mipLevel=0] - The mip level where the data should be copied to.
 	 */
-	_copyImageToTexture( image, textureGPU, textureDescriptorGPU, originDepth, flipY, premultiplyAlpha ) {
+	_copyImageToTexture( image, textureGPU, textureDescriptorGPU, originDepth, flipY, premultiplyAlpha, mipLevel = 0 ) {
 
 		const device = this.backend.device;
+
+		const width = ( mipLevel > 0 ) ? image.width : textureDescriptorGPU.size.width;
+		const height = ( mipLevel > 0 ) ? image.height : textureDescriptorGPU.size.height;
 
 		device.queue.copyExternalImageToTexture(
 			{
@@ -643,12 +706,12 @@ class WebGPUTextureUtils {
 				flipY: flipY
 			}, {
 				texture: textureGPU,
-				mipLevel: 0,
+				mipLevel: mipLevel,
 				origin: { x: 0, y: 0, z: originDepth },
 				premultipliedAlpha: premultiplyAlpha
 			}, {
-				width: textureDescriptorGPU.size.width,
-				height: textureDescriptorGPU.size.height,
+				width: width,
+				height: height,
 				depthOrArrayLayers: 1
 			}
 		);
@@ -712,9 +775,10 @@ class WebGPUTextureUtils {
 	 * @param {Object} textureDescriptorGPU - The GPU texture descriptor.
 	 * @param {number} originDepth - The origin depth.
 	 * @param {boolean} flipY - Whether to flip texture data along their vertical axis or not.
-	 * @param {number} [depth=0] - TODO.
+	 * @param {number} [depth=0] - The depth offset when copying array or 3D texture data.
+	 * @param {number} [mipLevel=0] - The mip level where the data should be copied to.
 	 */
-	_copyBufferToTexture( image, textureGPU, textureDescriptorGPU, originDepth, flipY, depth = 0 ) {
+	_copyBufferToTexture( image, textureGPU, textureDescriptorGPU, originDepth, flipY, depth = 0, mipLevel = 0 ) {
 
 		// @TODO: Consider to use GPUCommandEncoder.copyBufferToTexture()
 		// @TODO: Consider to support valid buffer layouts with other formats like RGB
@@ -729,7 +793,7 @@ class WebGPUTextureUtils {
 		device.queue.writeTexture(
 			{
 				texture: textureGPU,
-				mipLevel: 0,
+				mipLevel: mipLevel,
 				origin: { x: 0, y: 0, z: originDepth }
 			},
 			data,
@@ -977,7 +1041,7 @@ class WebGPUTextureUtils {
 		if ( format === GPUTextureFormat.RG8Snorm ) return Int8Array;
 		if ( format === GPUTextureFormat.RGBA8Uint ) return Uint8Array;
 		if ( format === GPUTextureFormat.RGBA8Sint ) return Int8Array;
-		if ( format === GPUTextureFormat.RGBA8Unorm ) return Uint8Array;
+		if ( format === GPUTextureFormat.RGBA8Unorm || format === GPUTextureFormat.RGBA8UnormSRGB ) return Uint8Array;
 		if ( format === GPUTextureFormat.RGBA8Snorm ) return Int8Array;
 
 
@@ -1002,8 +1066,7 @@ class WebGPUTextureUtils {
 		if ( format === GPUTextureFormat.RGBA32Sint ) return Int32Array;
 		if ( format === GPUTextureFormat.RGBA32Float ) return Float32Array;
 
-		if ( format === GPUTextureFormat.BGRA8Unorm ) return Uint8Array;
-		if ( format === GPUTextureFormat.BGRA8UnormSRGB ) return Uint8Array;
+		if ( format === GPUTextureFormat.BGRA8Unorm || format === GPUTextureFormat.BGRA8UnormSRGB ) return Uint8Array;
 		if ( format === GPUTextureFormat.RGB10A2Unorm ) return Uint32Array;
 		if ( format === GPUTextureFormat.RGB9E5UFloat ) return Uint32Array;
 		if ( format === GPUTextureFormat.RG11B10UFloat ) return Uint32Array;
@@ -1063,6 +1126,7 @@ export function getFormat( texture, device = null ) {
 
 		switch ( format ) {
 
+			case RGB_S3TC_DXT1_Format:
 			case RGBA_S3TC_DXT1_Format:
 				formatGPU = ( transfer === SRGBTransfer ) ? GPUTextureFormat.BC1RGBAUnormSRGB : GPUTextureFormat.BC1RGBAUnorm;
 				break;
@@ -1075,7 +1139,28 @@ export function getFormat( texture, device = null ) {
 				formatGPU = ( transfer === SRGBTransfer ) ? GPUTextureFormat.BC3RGBAUnormSRGB : GPUTextureFormat.BC3RGBAUnorm;
 				break;
 
+			case RED_RGTC1_Format:
+				formatGPU = GPUTextureFormat.BC4RUnorm;
+				break;
+
+			case SIGNED_RED_RGTC1_Format:
+				formatGPU = GPUTextureFormat.BC4RSnorm;
+				break;
+
+			case RED_GREEN_RGTC2_Format:
+				formatGPU = GPUTextureFormat.BC5RGUnorm;
+				break;
+
+			case SIGNED_RED_GREEN_RGTC2_Format:
+				formatGPU = GPUTextureFormat.BC5RGSnorm;
+				break;
+
+			case RGBA_BPTC_Format:
+				formatGPU = ( transfer === SRGBTransfer ) ? GPUTextureFormat.BC7RGBAUnormSRGB : GPUTextureFormat.BC7RGBAUnorm;
+				break;
+
 			case RGB_ETC2_Format:
+			case RGB_ETC1_Format:
 				formatGPU = ( transfer === SRGBTransfer ) ? GPUTextureFormat.ETC2RGB8UnormSRGB : GPUTextureFormat.ETC2RGB8Unorm;
 				break;
 
@@ -1144,7 +1229,7 @@ export function getFormat( texture, device = null ) {
 				break;
 
 			default:
-				console.error( 'WebGPURenderer: Unsupported texture format.', format );
+				error( 'WebGPURenderer: Unsupported texture format.', format );
 
 		}
 
@@ -1188,7 +1273,7 @@ export function getFormat( texture, device = null ) {
 						break;
 
 					default:
-						console.error( 'WebGPURenderer: Unsupported texture type with RGBAFormat.', type );
+						error( 'WebGPURenderer: Unsupported texture type with RGBAFormat.', type );
 
 				}
 
@@ -1202,8 +1287,12 @@ export function getFormat( texture, device = null ) {
 						formatGPU = GPUTextureFormat.RGB9E5UFloat;
 						break;
 
+					case UnsignedInt101111Type:
+						formatGPU = GPUTextureFormat.RG11B10UFloat;
+						break;
+
 					default:
-						console.error( 'WebGPURenderer: Unsupported texture type with RGBFormat.', type );
+						error( 'WebGPURenderer: Unsupported texture type with RGBFormat.', type );
 
 				}
 
@@ -1246,7 +1335,7 @@ export function getFormat( texture, device = null ) {
 						break;
 
 					default:
-						console.error( 'WebGPURenderer: Unsupported texture type with RedFormat.', type );
+						error( 'WebGPURenderer: Unsupported texture type with RedFormat.', type );
 
 				}
 
@@ -1289,7 +1378,7 @@ export function getFormat( texture, device = null ) {
 						break;
 
 					default:
-						console.error( 'WebGPURenderer: Unsupported texture type with RGFormat.', type );
+						error( 'WebGPURenderer: Unsupported texture type with RGFormat.', type );
 
 				}
 
@@ -1312,7 +1401,7 @@ export function getFormat( texture, device = null ) {
 						break;
 
 					default:
-						console.error( 'WebGPURenderer: Unsupported texture type with DepthFormat.', type );
+						error( 'WebGPURenderer: Unsupported texture type with DepthFormat.', type );
 
 				}
 
@@ -1330,7 +1419,7 @@ export function getFormat( texture, device = null ) {
 
 						if ( device && device.features.has( GPUFeatureName.Depth32FloatStencil8 ) === false ) {
 
-							console.error( 'WebGPURenderer: Depth textures with DepthStencilFormat + FloatType can only be used with the "depth32float-stencil8" GPU feature.' );
+							error( 'WebGPURenderer: Depth textures with DepthStencilFormat + FloatType can only be used with the "depth32float-stencil8" GPU feature.' );
 
 						}
 
@@ -1339,7 +1428,7 @@ export function getFormat( texture, device = null ) {
 						break;
 
 					default:
-						console.error( 'WebGPURenderer: Unsupported texture type with DepthStencilFormat.', type );
+						error( 'WebGPURenderer: Unsupported texture type with DepthStencilFormat.', type );
 
 				}
 
@@ -1358,7 +1447,7 @@ export function getFormat( texture, device = null ) {
 						break;
 
 					default:
-						console.error( 'WebGPURenderer: Unsupported texture type with RedIntegerFormat.', type );
+						error( 'WebGPURenderer: Unsupported texture type with RedIntegerFormat.', type );
 
 				}
 
@@ -1377,7 +1466,7 @@ export function getFormat( texture, device = null ) {
 						break;
 
 					default:
-						console.error( 'WebGPURenderer: Unsupported texture type with RGIntegerFormat.', type );
+						error( 'WebGPURenderer: Unsupported texture type with RGIntegerFormat.', type );
 
 				}
 
@@ -1396,14 +1485,14 @@ export function getFormat( texture, device = null ) {
 						break;
 
 					default:
-						console.error( 'WebGPURenderer: Unsupported texture type with RGBAIntegerFormat.', type );
+						error( 'WebGPURenderer: Unsupported texture type with RGBAIntegerFormat.', type );
 
 				}
 
 				break;
 
 			default:
-				console.error( 'WebGPURenderer: Unsupported texture format.', format );
+				error( 'WebGPURenderer: Unsupported texture format.', format );
 
 		}
 

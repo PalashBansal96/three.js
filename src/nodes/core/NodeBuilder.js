@@ -31,6 +31,7 @@ import { Vector2 } from '../../math/Vector2.js';
 import { Vector3 } from '../../math/Vector3.js';
 import { Vector4 } from '../../math/Vector4.js';
 import { Float16BufferAttribute } from '../../core/BufferAttribute.js';
+import { warn, error } from '../../utils.js';
 
 const rendererCache = new WeakMap();
 
@@ -258,6 +259,13 @@ class NodeBuilder {
 		 * @type {Object}
 		 */
 		this.structs = { vertex: [], fragment: [], compute: [], index: 0 };
+
+		/**
+		 * This dictionary holds the types of the builder.
+		 *
+		 * @type {Object}
+		 */
+		this.types = { vertex: [], fragment: [], compute: [], index: 0 };
 
 		/**
 		 * This dictionary holds the bindings for each shader stage.
@@ -722,7 +730,7 @@ class NodeBuilder {
 
 			if ( updateType !== NodeUpdateType.NONE ) {
 
-				this.updateNodes.push( node.getSelf() );
+				this.updateNodes.push( node );
 
 			}
 
@@ -735,13 +743,13 @@ class NodeBuilder {
 
 			if ( updateBeforeType !== NodeUpdateType.NONE ) {
 
-				this.updateBeforeNodes.push( node.getSelf() );
+				this.updateBeforeNodes.push( node );
 
 			}
 
 			if ( updateAfterType !== NodeUpdateType.NONE ) {
 
-				this.updateAfterNodes.push( node.getSelf() );
+				this.updateAfterNodes.push( node );
 
 			}
 
@@ -785,7 +793,7 @@ class NodeBuilder {
 		/*
 		if ( this.chaining.indexOf( node ) !== - 1 ) {
 
-			console.warn( 'Recursive node: ', node );
+			warn( 'Recursive node: ', node );
 
 		}
 		*/
@@ -966,7 +974,7 @@ class NodeBuilder {
 	 */
 	getVertexIndex() {
 
-		console.warn( 'Abstract function.' );
+		warn( 'Abstract function.' );
 
 	}
 
@@ -978,7 +986,7 @@ class NodeBuilder {
 	 */
 	getInstanceIndex() {
 
-		console.warn( 'Abstract function.' );
+		warn( 'Abstract function.' );
 
 	}
 
@@ -991,7 +999,7 @@ class NodeBuilder {
 	 */
 	getDrawIndex() {
 
-		console.warn( 'Abstract function.' );
+		warn( 'Abstract function.' );
 
 	}
 
@@ -1003,7 +1011,7 @@ class NodeBuilder {
 	 */
 	getFrontFacing() {
 
-		console.warn( 'Abstract function.' );
+		warn( 'Abstract function.' );
 
 	}
 
@@ -1015,7 +1023,7 @@ class NodeBuilder {
 	 */
 	getFragCoord() {
 
-		console.warn( 'Abstract function.' );
+		warn( 'Abstract function.' );
 
 	}
 
@@ -1058,7 +1066,7 @@ class NodeBuilder {
 	 */
 	generateTexture( /* texture, textureProperty, uvSnippet */ ) {
 
-		console.warn( 'Abstract function.' );
+		warn( 'Abstract function.' );
 
 	}
 
@@ -1075,7 +1083,7 @@ class NodeBuilder {
 	 */
 	generateTextureLod( /* texture, textureProperty, uvSnippet, depthSnippet, levelSnippet */ ) {
 
-		console.warn( 'Abstract function.' );
+		warn( 'Abstract function.' );
 
 	}
 
@@ -1568,7 +1576,9 @@ class NodeBuilder {
 
 		this.stack = stack( this.stack );
 
-		this.stacks.push( getCurrentStack() || this.stack );
+		const previousStack = getCurrentStack();
+
+		this.stacks.push( previousStack );
 		setCurrentStack( this.stack );
 
 		return this.stack;
@@ -1681,6 +1691,20 @@ class NodeBuilder {
 	}
 
 	/**
+	 * Returns an instance of {@link StructType} for the given struct name and shader stage
+	 * or null if not found.
+	 *
+	 * @param {string} name - The name of the struct.
+	 * @param {('vertex'|'fragment'|'compute'|'any')} [shaderStage=this.shaderStage] - The shader stage.
+	 * @return {?StructType} The struct type or null if not found.
+	 */
+	getStructTypeNode( name, shaderStage = this.shaderStage ) {
+
+		return this.types[ shaderStage ][ name ] || null;
+
+	}
+
+	/**
 	 * Returns an instance of {@link StructType} for the given output struct node.
 	 *
 	 * @param {OutputStructNode} node - The output struct node.
@@ -1704,6 +1728,7 @@ class NodeBuilder {
 			structType = new StructType( name, membersLayout );
 
 			this.structs[ shaderStage ].push( structType );
+			this.types[ shaderStage ][ name ] = node;
 
 			nodeData.structType = structType;
 
@@ -1947,7 +1972,7 @@ class NodeBuilder {
 
 			node.name = name;
 
-			console.warn( `THREE.TSL: Declaration name '${ property }' of '${ node.type }' already in use. Renamed to '${ name }'.` );
+			warn( `TSL: Declaration name '${ property }' of '${ node.type }' already in use. Renamed to '${ name }'.` );
 
 		}
 
@@ -2236,8 +2261,8 @@ class NodeBuilder {
 	 *
 	 * @param {Node} node - The node to execute.
 	 * @param {string} buildStage - The build stage to execute the node in.
-	 * @param {Node|string|null} output - Expected output type. For example 'vec3'.
-	 * @return {Node|string|null} The result of the node build.
+	 * @param {?(Node|string)} [output=null] - Expected output type. For example 'vec3'.
+	 * @return {?(Node|string)} The result of the node build.
 	 */
 	flowBuildStage( node, buildStage, output = null ) {
 
@@ -2324,7 +2349,7 @@ class NodeBuilder {
 	 */
 	buildFunctionCode( /* shaderNode */ ) {
 
-		console.warn( 'Abstract function.' );
+		warn( 'Abstract function.' );
 
 	}
 
@@ -2363,7 +2388,7 @@ class NodeBuilder {
 	 * @param {Node} node - The node to execute.
 	 * @param {?string} output - Expected output type. For example 'vec3'.
 	 * @param {?string} propertyName - The property name to assign the result.
-	 * @return {Object|Node|null} The code flow or node.build() result.
+	 * @return {?(Object|Node)} The code flow or node.build() result.
 	 */
 	flowNodeFromShaderStage( shaderStage, node, output = null, propertyName = null ) {
 
@@ -2433,7 +2458,7 @@ class NodeBuilder {
 	 */
 	getAttributes( /*shaderStage*/ ) {
 
-		console.warn( 'Abstract function.' );
+		warn( 'Abstract function.' );
 
 	}
 
@@ -2446,7 +2471,7 @@ class NodeBuilder {
 	 */
 	getVaryings( /*shaderStage*/ ) {
 
-		console.warn( 'Abstract function.' );
+		warn( 'Abstract function.' );
 
 	}
 
@@ -2499,7 +2524,7 @@ class NodeBuilder {
 	 */
 	getUniforms( /*shaderStage*/ ) {
 
-		console.warn( 'Abstract function.' );
+		warn( 'Abstract function.' );
 
 	}
 
@@ -2591,7 +2616,7 @@ class NodeBuilder {
 	 */
 	buildCode() {
 
-		console.warn( 'Abstract function.' );
+		warn( 'Abstract function.' );
 
 	}
 
@@ -2631,7 +2656,7 @@ class NodeBuilder {
 	/**
 	 * Returns the closest sub-build layer for the given data.
 	 *
-	 * @param {Node|Set|Array} data - The data to get the closest sub-build layer from.
+	 * @param {Node|Set<string>|Array<string>} data - The data to get the closest sub-build layer from.
 	 * @return {?string} The closest sub-build name or null if none found.
 	 */
 	getClosestSubBuild( data ) {
@@ -2749,7 +2774,7 @@ class NodeBuilder {
 
 			if ( nodeMaterial === null ) {
 
-				console.error( `NodeMaterial: Material "${ material.type }" is not compatible.` );
+				error( `NodeMaterial: Material "${ material.type }" is not compatible.` );
 
 				nodeMaterial = new NodeMaterial();
 
