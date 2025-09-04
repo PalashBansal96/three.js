@@ -412,13 +412,13 @@ export function setupCodeEditor (iframe) {
     window.addEventListener( 'DOMContentLoaded', () => {
 
         const editParam = new URLSearchParams( window.location.search ).get( 'edit' );
-        if ( editParam !== null ) toggleCode();
+        toggleCode();
 
         document.querySelector( '#codefiles-action-close' ).addEventListener( 'click', () => toggleCode() );
 
         document.querySelector( '#button' ).onclick = ()=>{
 
-            window.toggleCode();
+            toggleCode();
 
         };
 
@@ -442,7 +442,6 @@ export function setupCodeEditor (iframe) {
     }, { passive: false } );
 
     window.monacoPromise.then(editor=>editor.setFileUri = setFileUri)
-    window.toggleCode = toggleCode
 
     return setEditorExample
 }

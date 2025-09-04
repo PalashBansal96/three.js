@@ -31,15 +31,15 @@ export default {
 		}
 
 		if(
-			!url.pathname.startsWith('/examples/') &&
+			!url.pathname.startsWith('/examples') &&
 			!url.pathname.startsWith('/files/')
 		) {
 			// return Response.redirect(url.origin + '/examples/' + url.search + url.hash, 301)
 			return Response.redirect(url2, 302)
 		}
 
-		// if(url.pathname === '/examples/' || url.pathname === '/examples/index.html' || url.pathname.startsWith('/examples/_index')) {
-		// 	return fetch(request.url)
+		// if (url.pathname === '/examples' || url.pathname === '/examples/' || url.pathname === '/examples/index.html' || url.pathname.startsWith('/examples/_index')) {
+		// 	return env.ASSETS.fetch(request)
 		// }
 
         try {
