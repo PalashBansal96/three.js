@@ -72,7 +72,6 @@ body {
 	margin: 0px;
 	color: var(--text-color);
 	background-color: var(--background-color);
-    display: flex;
 }
 
 a {
@@ -136,7 +135,7 @@ hr {
 	font-size: .9rem;
 }
 #panel {
-	position: relative;
+	position: fixed;
 	z-index: 100;
 	left: 0px;
 	width: var(--panel-width);
@@ -391,7 +390,7 @@ hr {
 
 #viewer,
 iframe {
-	position: relative;
+	position: absolute;
 	border: 0px;
 	left: 0;
 	right: 0;
@@ -405,7 +404,7 @@ iframe#viewer {
 }
 
 #viewer {
-	/*padding-left: var(--panel-width);*/
+	padding-left: var(--panel-width);
 }
 
 #button {

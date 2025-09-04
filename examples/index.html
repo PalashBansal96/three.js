@@ -70,6 +70,17 @@
 		<script src="https://unpkg.com/monacopilot@1.2.7/dist/index.global.js"></script>
 		<script src="https://unpkg.com/monaco-tm@0.1.0/dist/index.global.js"></script>
 
+		<style>
+			body {
+				display: flex !important;
+			}
+			#panel, #viewer, iframe {
+				position: relative !important;
+			}
+			#viewer{
+				padding-left: 0 !important;
+			}
+		</style>
 		<script type="module">
 			import { setupCodeEditor } from './_index/editor/setup.mjs';
 			const iframe = document.getElementById( 'viewer' );
@@ -141,7 +152,6 @@
 					selectFile( file );
 					viewer.src = validRedirects.get( file );
 					viewer.style.display = 'unset';
-					window.setEditorExample( file + '.html' );
 
 				}
 
@@ -253,8 +263,6 @@
 
 				selectFile( file );
 
-				window.setEditorExample( event.currentTarget.href );
-
 			} );
 
 			return link;
@@ -268,7 +276,7 @@
 			links[ file ].classList.add( 'selected' );
 
 			window.location.hash = file;
-			// viewer.focus();
+			viewer.focus();
 			viewer.style.display = 'unset';
 
 			panel.classList.remove( 'open' );
@@ -277,9 +285,10 @@
 
 			// Reveal "View source" button and set attributes to this example
 			viewSrcButton.style.display = '';
-			viewSrcButton.href = '#';
-			viewSrcButton.target = '';
+			viewSrcButton.href = 'https://github.com/mrdoob/three.js/blob/master/examples/' + selected + '.html';
 			viewSrcButton.title = 'View source code for ' + getName( selected ) + ' on GitHub';
+
+			window.setEditorExample( file + '.html' );
 
 		}
 
@@ -436,6 +445,5 @@
 					</body>
 				</html>
 		</template>
-
 	</body>
 </html>

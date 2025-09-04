@@ -1,0 +1,15 @@
+{
+  "name": "threejs-dev-editor-proxy",
+  "version": "1.0.0",
+  "description": "",
+  "main": "cf.js",
+  "scripts": {
+    "dev": "npm run build && wrangler dev",
+    "build": "mkdir -p dist/examples && cp ../examples/index.html dist/examples && cp -r ../examples/_index dist/examples",
+    "deploy": "npm run build && wrangler deploy"
+  },
+  "dependencies": {
+    "wrangler": "^4.34.0"
+  },
+  "private": true
+}

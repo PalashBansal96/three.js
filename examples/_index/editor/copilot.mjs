@@ -63,7 +63,7 @@ export function setupMonacopilot( monaco, editor ) {
 		},
 	} );
 
-	console.log( completion );
+	// console.log( completion );
 	// completion.updateOptions((currentOptions) => ({
 	//     relatedFiles: [
 	//         ...currentOptions.relatedFiles,

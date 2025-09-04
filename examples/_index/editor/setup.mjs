@@ -346,7 +346,6 @@ export function setupCodeEditor (iframe) {
 
         exampleState[exampleId2] = state
 
-
         if(exampleId2 !== example) {
             htmlPath.pathname = htmlPath.pathname.replace(example, exampleId2);
         }
