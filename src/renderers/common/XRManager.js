@@ -1041,7 +1041,7 @@ class XRManager extends EventDispatcher {
 				// fallback to XRWebGLLayer
 
 				const layerInit = {
-					antialias: renderer.samples > 0,
+					antialias: renderer.currentSamples > 0,
 					alpha: true,
 					depth: renderer.depth,
 					stencil: renderer.stencil,
@@ -1381,6 +1381,9 @@ function onSessionEnd() {
 
 	this._session = null;
 	this._xrRenderTarget = null;
+	this._glBinding = null;
+	this._glBaseLayer = null;
+	this._glProjLayer = null;
 
 	// switch layers back to emulated
 	if ( this._sessionUsesLayers === true ) {

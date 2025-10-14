@@ -5,7 +5,7 @@
  */
 'use strict';
 
-const REVISION = '180';
+const REVISION = '181dev';
 
 /**
  * Represents mouse buttons and interaction types in context of controls.
@@ -1681,6 +1681,157 @@ const InterpolationSamplingMode = {
  * @property {string} EITHER - Flat interpolation using either vertex.
  */
 
+function arrayNeedsUint32( array ) {
+
+	// assumes larger values usually on last
+
+	for ( let i = array.length - 1; i >= 0; -- i ) {
+
+		if ( array[ i ] >= 65535 ) return true; // account for PRIMITIVE_RESTART_FIXED_INDEX, #24565
+
+	}
+
+	return false;
+
+}
+
+const TYPED_ARRAYS = {
+	Int8Array: Int8Array,
+	Uint8Array: Uint8Array,
+	Uint8ClampedArray: Uint8ClampedArray,
+	Int16Array: Int16Array,
+	Uint16Array: Uint16Array,
+	Int32Array: Int32Array,
+	Uint32Array: Uint32Array,
+	Float32Array: Float32Array,
+	Float64Array: Float64Array
+};
+
+function getTypedArray( type, buffer ) {
+
+	return new TYPED_ARRAYS[ type ]( buffer );
+
+}
+
+function createElementNS( name ) {
+
+	return document.createElementNS( 'http://www.w3.org/1999/xhtml', name );
+
+}
+
+function createCanvasElement() {
+
+	const canvas = createElementNS( 'canvas' );
+	canvas.style.display = 'block';
+	return canvas;
+
+}
+
+const _cache = {};
+
+let _setConsoleFunction = null;
+
+function setConsoleFunction( fn ) {
+
+	_setConsoleFunction = fn;
+
+}
+
+function getConsoleFunction() {
+
+	return _setConsoleFunction;
+
+}
+
+function log( ...params ) {
+
+	const message = 'THREE.' + params.shift();
+
+	if ( _setConsoleFunction ) {
+
+		_setConsoleFunction( 'log', message, ...params );
+
+	} else {
+
+		console.log( message, ...params );
+
+	}
+
+}
+
+function warn( ...params ) {
+
+	const message = 'THREE.' + params.shift();
+
+	if ( _setConsoleFunction ) {
+
+		_setConsoleFunction( 'warn', message, ...params );
+
+	} else {
+
+		console.warn( message, ...params );
+
+	}
+
+}
+
+function error( ...params ) {
+
+	const message = 'THREE.' + params.shift();
+
+	if ( _setConsoleFunction ) {
+
+		_setConsoleFunction( 'error', message, ...params );
+
+	} else {
+
+		console.error( message, ...params );
+
+	}
+
+}
+
+function warnOnce( ...params ) {
+
+	const message = params.join( ' ' );
+
+	if ( message in _cache ) return;
+
+	_cache[ message ] = true;
+
+	warn( ...params );
+
+}
+
+function probeAsync( gl, sync, interval ) {
+
+	return new Promise( function ( resolve, reject ) {
+
+		function probe() {
+
+			switch ( gl.clientWaitSync( sync, gl.SYNC_FLUSH_COMMANDS_BIT, 0 ) ) {
+
+				case gl.WAIT_FAILED:
+					reject();
+					break;
+
+				case gl.TIMEOUT_EXPIRED:
+					setTimeout( probe, interval );
+					break;
+
+				default:
+					resolve();
+
+			}
+
+		}
+
+		setTimeout( probe, interval );
+
+	} );
+
+}
+
 /**
  * This modules allows to dispatch event objects on custom JavaScript objects.
  *
@@ -2182,7 +2333,7 @@ function setQuaternionFromProperEuler( q, a, b, c, order ) {
 			break;
 
 		default:
-			console.warn( 'THREE.MathUtils: .setQuaternionFromProperEuler() encountered an unknown order: ' + order );
+			warn( 'MathUtils: .setQuaternionFromProperEuler() encountered an unknown order: ' + order );
 
 	}
 
@@ -3440,7 +3591,7 @@ class Quaternion {
 
 	/**
 	 * Interpolates between two quaternions via SLERP. This implementation assumes the
-	 * quaternion data are managed  in flat arrays.
+	 * quaternion data are managed in flat arrays.
 	 *
 	 * @param {Array<number>} dst - The destination array.
 	 * @param {number} dstOffset - An offset into the destination array.
@@ -3453,65 +3604,78 @@ class Quaternion {
 	 */
 	static slerpFlat( dst, dstOffset, src0, srcOffset0, src1, srcOffset1, t ) {
 
-		// fuzz-free, array-based Quaternion SLERP operation
-
 		let x0 = src0[ srcOffset0 + 0 ],
 			y0 = src0[ srcOffset0 + 1 ],
 			z0 = src0[ srcOffset0 + 2 ],
 			w0 = src0[ srcOffset0 + 3 ];
 
-		const x1 = src1[ srcOffset1 + 0 ],
+		let x1 = src1[ srcOffset1 + 0 ],
 			y1 = src1[ srcOffset1 + 1 ],
 			z1 = src1[ srcOffset1 + 2 ],
 			w1 = src1[ srcOffset1 + 3 ];
 
-		if ( t === 0 ) {
+		if ( t <= 0 ) {
 
 			dst[ dstOffset + 0 ] = x0;
 			dst[ dstOffset + 1 ] = y0;
 			dst[ dstOffset + 2 ] = z0;
 			dst[ dstOffset + 3 ] = w0;
+
 			return;
 
 		}
 
-		if ( t === 1 ) {
+		if ( t >= 1 ) {
 
 			dst[ dstOffset + 0 ] = x1;
 			dst[ dstOffset + 1 ] = y1;
 			dst[ dstOffset + 2 ] = z1;
 			dst[ dstOffset + 3 ] = w1;
+
 			return;
 
 		}
 
 		if ( w0 !== w1 || x0 !== x1 || y0 !== y1 || z0 !== z1 ) {
 
-			let s = 1 - t;
-			const cos = x0 * x1 + y0 * y1 + z0 * z1 + w0 * w1,
-				dir = ( cos >= 0 ? 1 : -1 ),
-				sqrSin = 1 - cos * cos;
+			let dot = x0 * x1 + y0 * y1 + z0 * z1 + w0 * w1;
 
-			// Skip the Slerp for tiny steps to avoid numeric problems:
-			if ( sqrSin > Number.EPSILON ) {
+			if ( dot < 0 ) {
 
-				const sin = Math.sqrt( sqrSin ),
-					len = Math.atan2( sin, cos * dir );
+				x1 = - x1;
+				y1 = - y1;
+				z1 = - z1;
+				w1 = - w1;
 
-				s = Math.sin( s * len ) / sin;
-				t = Math.sin( t * len ) / sin;
+				dot = - dot;
 
 			}
 
-			const tDir = t * dir;
+			let s = 1 - t;
 
-			x0 = x0 * s + x1 * tDir;
-			y0 = y0 * s + y1 * tDir;
-			z0 = z0 * s + z1 * tDir;
-			w0 = w0 * s + w1 * tDir;
+			if ( dot < 0.9995 ) {
 
-			// Normalize in case we just did a lerp:
-			if ( s === 1 - t ) {
+				// slerp
+
+				const theta = Math.acos( dot );
+				const sin = Math.sin( theta );
+
+				s = Math.sin( s * theta ) / sin;
+				t = Math.sin( t * theta ) / sin;
+
+				x0 = x0 * s + x1 * t;
+				y0 = y0 * s + y1 * t;
+				z0 = z0 * s + z1 * t;
+				w0 = w0 * s + w1 * t;
+
+			} else {
+
+				// for small angles, lerp then normalize
+
+				x0 = x0 * s + x1 * t;
+				y0 = y0 * s + y1 * t;
+				z0 = z0 * s + z1 * t;
+				w0 = w0 * s + w1 * t;
 
 				const f = 1 / Math.sqrt( x0 * x0 + y0 * y0 + z0 * z0 + w0 * w0 );
 
@@ -3765,7 +3929,7 @@ class Quaternion {
 				break;
 
 			default:
-				console.warn( 'THREE.Quaternion: .setFromEuler() encountered an unknown order: ' + order );
+				warn( 'Quaternion: .setFromEuler() encountered an unknown order: ' + order );
 
 		}
 
@@ -4121,68 +4285,56 @@ class Quaternion {
 	 */
 	slerp( qb, t ) {
 
-		if ( t === 0 ) return this;
-		if ( t === 1 ) return this.copy( qb );
+		if ( t <= 0 ) return this;
 
-		const x = this._x, y = this._y, z = this._z, w = this._w;
+		if ( t >= 1 ) return this.copy( qb ); // copy calls _onChangeCallback()
 
-		// http://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/slerp/
+		let x = qb._x, y = qb._y, z = qb._z, w = qb._w;
 
-		let cosHalfTheta = w * qb._w + x * qb._x + y * qb._y + z * qb._z;
+		let dot = this.dot( qb );
 
-		if ( cosHalfTheta < 0 ) {
+		if ( dot < 0 ) {
 
-			this._w = - qb._w;
-			this._x = - qb._x;
-			this._y = - qb._y;
-			this._z = - qb._z;
+			x = - x;
+			y = - y;
+			z = - z;
+			w = - w;
 
-			cosHalfTheta = - cosHalfTheta;
+			dot = - dot;
+
+		}
+
+		let s = 1 - t;
+
+		if ( dot < 0.9995 ) {
+
+			// slerp
+
+			const theta = Math.acos( dot );
+			const sin = Math.sin( theta );
+
+			s = Math.sin( s * theta ) / sin;
+			t = Math.sin( t * theta ) / sin;
+
+			this._x = this._x * s + x * t;
+			this._y = this._y * s + y * t;
+			this._z = this._z * s + z * t;
+			this._w = this._w * s + w * t;
+
+			this._onChangeCallback();
 
 		} else {
 
-			this.copy( qb );
+			// for small angles, lerp then normalize
 
-		}
-
-		if ( cosHalfTheta >= 1.0 ) {
-
-			this._w = w;
-			this._x = x;
-			this._y = y;
-			this._z = z;
-
-			return this;
-
-		}
-
-		const sqrSinHalfTheta = 1.0 - cosHalfTheta * cosHalfTheta;
-
-		if ( sqrSinHalfTheta <= Number.EPSILON ) {
-
-			const s = 1 - t;
-			this._w = s * w + t * this._w;
-			this._x = s * x + t * this._x;
-			this._y = s * y + t * this._y;
-			this._z = s * z + t * this._z;
+			this._x = this._x * s + x * t;
+			this._y = this._y * s + y * t;
+			this._z = this._z * s + z * t;
+			this._w = this._w * s + w * t;
 
 			this.normalize(); // normalize calls _onChangeCallback()
 
-			return this;
-
 		}
-
-		const sinHalfTheta = Math.sqrt( sqrSinHalfTheta );
-		const halfTheta = Math.atan2( sinHalfTheta, cosHalfTheta );
-		const ratioA = Math.sin( ( 1 - t ) * halfTheta ) / sinHalfTheta,
-			ratioB = Math.sin( t * halfTheta ) / sinHalfTheta;
-
-		this._w = ( w * ratioA + this._w * ratioB );
-		this._x = ( x * ratioA + this._x * ratioB );
-		this._y = ( y * ratioA + this._y * ratioB );
-		this._z = ( z * ratioA + this._z * ratioB );
-
-		this._onChangeCallback();
 
 		return this;
 
@@ -6203,93 +6355,6 @@ class Matrix3 {
 
 const _m3 = /*@__PURE__*/ new Matrix3();
 
-function arrayNeedsUint32( array ) {
-
-	// assumes larger values usually on last
-
-	for ( let i = array.length - 1; i >= 0; -- i ) {
-
-		if ( array[ i ] >= 65535 ) return true; // account for PRIMITIVE_RESTART_FIXED_INDEX, #24565
-
-	}
-
-	return false;
-
-}
-
-const TYPED_ARRAYS = {
-	Int8Array: Int8Array,
-	Uint8Array: Uint8Array,
-	Uint8ClampedArray: Uint8ClampedArray,
-	Int16Array: Int16Array,
-	Uint16Array: Uint16Array,
-	Int32Array: Int32Array,
-	Uint32Array: Uint32Array,
-	Float32Array: Float32Array,
-	Float64Array: Float64Array
-};
-
-function getTypedArray( type, buffer ) {
-
-	return new TYPED_ARRAYS[ type ]( buffer );
-
-}
-
-function createElementNS( name ) {
-
-	return document.createElementNS( 'http://www.w3.org/1999/xhtml', name );
-
-}
-
-function createCanvasElement() {
-
-	const canvas = createElementNS( 'canvas' );
-	canvas.style.display = 'block';
-	return canvas;
-
-}
-
-const _cache = {};
-
-function warnOnce( message ) {
-
-	if ( message in _cache ) return;
-
-	_cache[ message ] = true;
-
-	console.warn( message );
-
-}
-
-function probeAsync( gl, sync, interval ) {
-
-	return new Promise( function ( resolve, reject ) {
-
-		function probe() {
-
-			switch ( gl.clientWaitSync( sync, gl.SYNC_FLUSH_COMMANDS_BIT, 0 ) ) {
-
-				case gl.WAIT_FAILED:
-					reject();
-					break;
-
-				case gl.TIMEOUT_EXPIRED:
-					setTimeout( probe, interval );
-					break;
-
-				default:
-					resolve();
-
-			}
-
-		}
-
-		setTimeout( probe, interval );
-
-	} );
-
-}
-
 const LINEAR_REC709_TO_XYZ = /*@__PURE__*/ new Matrix3().set(
 	0.4123908, 0.3575843, 0.1804808,
 	0.2126390, 0.7151687, 0.0721923,
@@ -6435,7 +6500,7 @@ function createColorManagement() {
 
 		fromWorkingColorSpace: function ( color, targetColorSpace ) {
 
-			warnOnce( 'THREE.ColorManagement: .fromWorkingColorSpace() has been renamed to .workingToColorSpace().' ); // @deprecated, r177
+			warnOnce( 'ColorManagement: .fromWorkingColorSpace() has been renamed to .workingToColorSpace().' ); // @deprecated, r177
 
 			return ColorManagement.workingToColorSpace( color, targetColorSpace );
 
@@ -6443,7 +6508,7 @@ function createColorManagement() {
 
 		toWorkingColorSpace: function ( color, sourceColorSpace ) {
 
-			warnOnce( 'THREE.ColorManagement: .toWorkingColorSpace() has been renamed to .colorSpaceToWorking().' ); // @deprecated, r177
+			warnOnce( 'ColorManagement: .toWorkingColorSpace() has been renamed to .colorSpaceToWorking().' ); // @deprecated, r177
 
 			return ColorManagement.colorSpaceToWorking( color, sourceColorSpace );
 
@@ -6626,7 +6691,7 @@ class ImageUtils {
 
 		} else {
 
-			console.warn( 'THREE.ImageUtils.sRGBToLinear(): Unsupported image type. No color space conversion applied.' );
+			warn( 'ImageUtils.sRGBToLinear(): Unsupported image type. No color space conversion applied.' );
 			return image;
 
 		}
@@ -6851,7 +6916,7 @@ function serializeImage( image ) {
 
 		} else {
 
-			console.warn( 'THREE.Texture: Unable to serialize Texture.' );
+			warn( 'Texture: Unable to serialize Texture.' );
 			return {};
 
 		}
@@ -7365,7 +7430,7 @@ class Texture extends EventDispatcher {
 
 			if ( newValue === undefined ) {
 
-				console.warn( `THREE.Texture.setValues(): parameter '${ key }' has value of undefined.` );
+				warn( `Texture.setValues(): parameter '${ key }' has value of undefined.` );
 				continue;
 
 			}
@@ -7374,7 +7439,7 @@ class Texture extends EventDispatcher {
 
 			if ( currentValue === undefined ) {
 
-				console.warn( `THREE.Texture.setValues(): property '${ key }' does not exist.` );
+				warn( `Texture.setValues(): property '${ key }' does not exist.` );
 				continue;
 
 			}
@@ -8991,7 +9056,16 @@ class RenderTarget extends EventDispatcher {
 				this.textures[ i ].image.width = width;
 				this.textures[ i ].image.height = height;
 				this.textures[ i ].image.depth = depth;
-				this.textures[ i ].isArrayTexture = this.textures[ i ].image.depth > 1;
+
+				if ( this.textures[ i ].isData3DTexture !== true ) { // Fix for #31693
+
+					// TODO: Reconsider setting isArrayTexture flag here and in the ctor of Texture.
+					// Maybe a method `isArrayTexture()` or just a getter could replace a flag since
+					// both are evaluated on each call?
+
+					this.textures[ i ].isArrayTexture = this.textures[ i ].image.depth > 1;
+
+				}
 
 			}
 
@@ -12903,7 +12977,7 @@ class Euler {
 
 			default:
 
-				console.warn( 'THREE.Euler: .setFromRotationMatrix() encountered an unknown order: ' + order );
+				warn( 'Euler: .setFromRotationMatrix() encountered an unknown order: ' + order );
 
 		}
 
@@ -13889,7 +13963,7 @@ class Object3D extends EventDispatcher {
 
 		if ( object === this ) {
 
-			console.error( 'THREE.Object3D.add: object can\'t be added as a child of itself.', object );
+			error( 'Object3D.add: object can\'t be added as a child of itself.', object );
 			return this;
 
 		}
@@ -13908,7 +13982,7 @@ class Object3D extends EventDispatcher {
 
 		} else {
 
-			console.error( 'THREE.Object3D.add: object not an instance of THREE.Object3D.', object );
+			error( 'Object3D.add: object not an instance of THREE.Object3D.', object );
 
 		}
 
@@ -15594,7 +15668,7 @@ class Color {
 
 			if ( parseFloat( string ) < 1 ) {
 
-				console.warn( 'THREE.Color: Alpha component of ' + style + ' will be ignored.' );
+				warn( 'Color: Alpha component of ' + style + ' will be ignored.' );
 
 			}
 
@@ -15670,7 +15744,7 @@ class Color {
 
 				default:
 
-					console.warn( 'THREE.Color: Unknown color model ' + style );
+					warn( 'Color: Unknown color model ' + style );
 
 			}
 
@@ -15698,7 +15772,7 @@ class Color {
 
 			} else {
 
-				console.warn( 'THREE.Color: Invalid hex color ' + style );
+				warn( 'Color: Invalid hex color ' + style );
 
 			}
 
@@ -15738,7 +15812,7 @@ class Color {
 		} else {
 
 			// unknown color
-			console.warn( 'THREE.Color: Unknown color ' + style );
+			warn( 'Color: Unknown color ' + style );
 
 		}
 
@@ -16825,7 +16899,7 @@ class Material extends EventDispatcher {
 
 			if ( newValue === undefined ) {
 
-				console.warn( `THREE.Material: parameter '${ key }' has value of undefined.` );
+				warn( `Material: parameter '${ key }' has value of undefined.` );
 				continue;
 
 			}
@@ -16834,7 +16908,7 @@ class Material extends EventDispatcher {
 
 			if ( currentValue === undefined ) {
 
-				console.warn( `THREE.Material: '${ key }' is not a property of THREE.${ this.type }.` );
+				warn( `Material: '${ key }' is not a property of THREE.${ this.type }.` );
 				continue;
 
 			}
@@ -17281,6 +17355,7 @@ class Material extends EventDispatcher {
  * This material is not affected by lights.
  *
  * @augments Material
+ * @demo scenes/material-browser.html#MeshBasicMaterial
  */
 class MeshBasicMaterial extends Material {
 
@@ -17666,7 +17741,7 @@ function _generateTables() {
  */
 function toHalfFloat( val ) {
 
-	if ( Math.abs( val ) > 65504 ) console.warn( 'THREE.DataUtils.toHalfFloat(): Value out of range.' );
+	if ( Math.abs( val ) > 65504 ) warn( 'DataUtils.toHalfFloat(): Value out of range.' );
 
 	val = clamp( val, -65504, 65504 );
 
@@ -19337,7 +19412,7 @@ class BufferGeometry extends EventDispatcher {
 
 			if ( points.length > positionAttribute.count ) {
 
-				console.warn( 'THREE.BufferGeometry: Buffer size too small for points data. Use .dispose() and create a new geometry.' );
+				warn( 'BufferGeometry: Buffer size too small for points data. Use .dispose() and create a new geometry.' );
 
 			}
 
@@ -19367,7 +19442,7 @@ class BufferGeometry extends EventDispatcher {
 
 		if ( position && position.isGLBufferAttribute ) {
 
-			console.error( 'THREE.BufferGeometry.computeBoundingBox(): GLBufferAttribute requires a manual bounding box.', this );
+			error( 'BufferGeometry.computeBoundingBox(): GLBufferAttribute requires a manual bounding box.', this );
 
 			this.boundingBox.set(
 				new Vector3( - Infinity, - Infinity, - Infinity ),
@@ -19418,7 +19493,7 @@ class BufferGeometry extends EventDispatcher {
 
 		if ( isNaN( this.boundingBox.min.x ) || isNaN( this.boundingBox.min.y ) || isNaN( this.boundingBox.min.z ) ) {
 
-			console.error( 'THREE.BufferGeometry.computeBoundingBox(): Computed min/max have NaN values. The "position" attribute is likely to have NaN values.', this );
+			error( 'BufferGeometry.computeBoundingBox(): Computed min/max have NaN values. The "position" attribute is likely to have NaN values.', this );
 
 		}
 
@@ -19442,7 +19517,7 @@ class BufferGeometry extends EventDispatcher {
 
 		if ( position && position.isGLBufferAttribute ) {
 
-			console.error( 'THREE.BufferGeometry.computeBoundingSphere(): GLBufferAttribute requires a manual bounding sphere.', this );
+			error( 'BufferGeometry.computeBoundingSphere(): GLBufferAttribute requires a manual bounding sphere.', this );
 
 			this.boundingSphere.set( new Vector3(), Infinity );
 
@@ -19533,7 +19608,7 @@ class BufferGeometry extends EventDispatcher {
 
 			if ( isNaN( this.boundingSphere.radius ) ) {
 
-				console.error( 'THREE.BufferGeometry.computeBoundingSphere(): Computed radius is NaN. The "position" attribute is likely to have NaN values.', this );
+				error( 'BufferGeometry.computeBoundingSphere(): Computed radius is NaN. The "position" attribute is likely to have NaN values.', this );
 
 			}
 
@@ -19561,7 +19636,7 @@ class BufferGeometry extends EventDispatcher {
 			 attributes.normal === undefined ||
 			 attributes.uv === undefined ) {
 
-			console.error( 'THREE.BufferGeometry: .computeTangents() failed. Missing required attributes (index, position, normal or uv)' );
+			error( 'BufferGeometry: .computeTangents() failed. Missing required attributes (index, position, normal or uv)' );
 			return;
 
 		}
@@ -19871,7 +19946,7 @@ class BufferGeometry extends EventDispatcher {
 
 		if ( this.index === null ) {
 
-			console.warn( 'THREE.BufferGeometry.toNonIndexed(): BufferGeometry is already non-indexed.' );
+			warn( 'BufferGeometry.toNonIndexed(): BufferGeometry is already non-indexed.' );
 			return this;
 
 		}
@@ -20681,6 +20756,7 @@ function checkGeometryIntersection( object, material, raycaster, ray, uv, uv1, n
  * ```
  *
  * @augments BufferGeometry
+ * @demo scenes/geometry-browser.html#BoxGeometry
  */
 class BoxGeometry extends BufferGeometry {
 
@@ -20881,8 +20957,20 @@ class BoxGeometry extends BufferGeometry {
 
 }
 
-// Uniform Utilities
+/**
+ * Provides utility functions for managing uniforms.
+ *
+ * @module UniformsUtils
+ */
 
+/**
+ * Clones the given uniform definitions by performing a deep-copy. That means
+ * if the value of a uniform refers to an object like a Vector3 or Texture,
+ * the cloned uniform will refer to a new object reference.
+ *
+ * @param {Object} src - An object representing uniform definitions.
+ * @return {Object} The cloned uniforms.
+ */
 function cloneUniforms( src ) {
 
 	const dst = {};
@@ -20902,7 +20990,7 @@ function cloneUniforms( src ) {
 
 				if ( property.isRenderTargetTexture ) {
 
-					console.warn( 'UniformsUtils: Textures of render targets cannot be cloned via cloneUniforms() or mergeUniforms().' );
+					warn( 'UniformsUtils: Textures of render targets cannot be cloned via cloneUniforms() or mergeUniforms().' );
 					dst[ u ][ p ] = null;
 
 				} else {
@@ -20929,6 +21017,14 @@ function cloneUniforms( src ) {
 
 }
 
+/**
+ * Merges the given uniform definitions into a single object. Since the
+ * method internally uses cloneUniforms(), it performs a deep-copy when
+ * producing the merged uniform definitions.
+ *
+ * @param {Array} uniforms - An array of objects containing uniform definitions.
+ * @return {Object} The merged uniforms.
+ */
 function mergeUniforms( uniforms ) {
 
 	const merged = {};
@@ -23902,7 +23998,7 @@ class InterleavedBufferAttribute {
 
 		if ( data === undefined ) {
 
-			console.log( 'THREE.InterleavedBufferAttribute.clone(): Cloning an interleaved buffer attribute will de-interleave buffer data.' );
+			log( 'InterleavedBufferAttribute.clone(): Cloning an interleaved buffer attribute will de-interleave buffer data.' );
 
 			const array = [];
 
@@ -23952,7 +24048,7 @@ class InterleavedBufferAttribute {
 
 		if ( data === undefined ) {
 
-			console.log( 'THREE.InterleavedBufferAttribute.toJSON(): Serializing an interleaved buffer attribute will de-interleave buffer data.' );
+			log( 'InterleavedBufferAttribute.toJSON(): Serializing an interleaved buffer attribute will de-interleave buffer data.' );
 
 			const array = [];
 
@@ -24260,7 +24356,7 @@ class Sprite extends Object3D {
 
 		if ( raycaster.camera === null ) {
 
-			console.error( 'THREE.Sprite: "Raycaster.camera" needs to be set in order to raycast against sprites.' );
+			error( 'Sprite: "Raycaster.camera" needs to be set in order to raycast against sprites.' );
 
 		}
 
@@ -24721,6 +24817,7 @@ const _ray$2 = /*@__PURE__*/ new Ray();
  * or {@link FBXLoader } import respective models.
  *
  * @augments Mesh
+ * @demo scenes/bones-browser.html
  */
 class SkinnedMesh extends Mesh {
 
@@ -24988,7 +25085,7 @@ class SkinnedMesh extends Mesh {
 
 		} else {
 
-			console.warn( 'THREE.SkinnedMesh: Unrecognized bindMode: ' + this.bindMode );
+			warn( 'SkinnedMesh: Unrecognized bindMode: ' + this.bindMode );
 
 		}
 
@@ -25257,7 +25354,7 @@ class Skeleton {
 
 			if ( bones.length !== boneInverses.length ) {
 
-				console.warn( 'THREE.Skeleton: Number of inverse bone matrices does not match amount of bones.' );
+				warn( 'Skeleton: Number of inverse bone matrices does not match amount of bones.' );
 
 				this.boneInverses = [];
 
@@ -25475,7 +25572,7 @@ class Skeleton {
 
 			if ( bone === undefined ) {
 
-				console.warn( 'THREE.Skeleton: No bone found with UUID:', uuid );
+				warn( 'Skeleton: No bone found with UUID:', uuid );
 				bone = new Bone();
 
 			}
@@ -28766,7 +28863,7 @@ class Line extends Object3D {
 
 		} else {
 
-			console.warn( 'THREE.Line.computeLineDistances(): Computation only possible with non-indexed BufferGeometry.' );
+			warn( 'Line.computeLineDistances(): Computation only possible with non-indexed BufferGeometry.' );
 
 		}
 
@@ -29007,7 +29104,7 @@ class LineSegments extends Line {
 
 		} else {
 
-			console.warn( 'THREE.LineSegments.computeLineDistances(): Computation only possible with non-indexed BufferGeometry.' );
+			warn( 'LineSegments.computeLineDistances(): Computation only possible with non-indexed BufferGeometry.' );
 
 		}
 
@@ -30093,6 +30190,7 @@ class ExternalTexture extends Texture {
  * ```
  *
  * @augments BufferGeometry
+ * @demo scenes/geometry-browser.html#CapsuleGeometry
  */
 class CapsuleGeometry extends BufferGeometry {
 
@@ -30310,6 +30408,7 @@ class CapsuleGeometry extends BufferGeometry {
  * ```
  *
  * @augments BufferGeometry
+ * @demo scenes/geometry-browser.html#CircleGeometry
  */
 class CircleGeometry extends BufferGeometry {
 
@@ -30439,6 +30538,7 @@ class CircleGeometry extends BufferGeometry {
  * ```
  *
  * @augments BufferGeometry
+ * @demo scenes/geometry-browser.html#CylinderGeometry
  */
 class CylinderGeometry extends BufferGeometry {
 
@@ -30764,6 +30864,7 @@ class CylinderGeometry extends BufferGeometry {
  * ```
  *
  * @augments CylinderGeometry
+ * @demo scenes/geometry-browser.html#ConeGeometry
  */
 class ConeGeometry extends CylinderGeometry {
 
@@ -31172,6 +31273,7 @@ class PolyhedronGeometry extends BufferGeometry {
  * ```
  *
  * @augments PolyhedronGeometry
+ * @demo scenes/geometry-browser.html#DodecahedronGeometry
  */
 class DodecahedronGeometry extends PolyhedronGeometry {
 
@@ -31491,7 +31593,7 @@ class Curve {
 	 */
 	getPoint( /* t, optionalTarget */ ) {
 
-		console.warn( 'THREE.Curve: .getPoint() not implemented.' );
+		warn( 'Curve: .getPoint() not implemented.' );
 
 	}
 
@@ -32549,7 +32651,13 @@ class CatmullRomCurve3 extends Curve {
 
 }
 
-// Bezier Curves formulas obtained from: https://en.wikipedia.org/wiki/B%C3%A9zier_curve
+/**
+ * Interpolations contains spline and Bézier functions internally used by concrete curve classes.
+ *
+ * Bezier Curves formulas obtained from: https://en.wikipedia.org/wiki/B%C3%A9zier_curve
+ *
+ * @module Interpolations
+ */
 
 /**
  * Computes a point on a Catmull-Rom spline.
@@ -34331,8 +34439,8 @@ class Shape extends Path {
 }
 
 /* eslint-disable */
-// copy of mapbox/earcut version 3.0.1
-// https://github.com/mapbox/earcut/tree/v3.0.1
+// copy of mapbox/earcut version 3.0.2
+// https://github.com/mapbox/earcut/tree/v3.0.2
 
 function earcut(data, holeIndices, dim = 2) {
 
@@ -34349,10 +34457,10 @@ function earcut(data, holeIndices, dim = 2) {
 
     // if the shape is not too simple, we'll use z-order curve hash later; calculate polygon bbox
     if (data.length > 80 * dim) {
-        minX = Infinity;
-        minY = Infinity;
-        let maxX = -Infinity;
-        let maxY = -Infinity;
+        minX = data[0];
+        minY = data[1];
+        let maxX = minX;
+        let maxY = minY;
 
         for (let i = dim; i < outerLen; i += dim) {
             const x = data[i];
@@ -34628,7 +34736,7 @@ function compareXYSlope(a, b) {
     return result;
 }
 
-// find a bridge between vertices that connects hole with an outer ring and and link it
+// find a bridge between vertices that connects hole with an outer ring and link it
 function eliminateHole(hole, outerNode) {
     const bridge = findHoleBridge(hole, outerNode);
     if (!bridge) {
@@ -34966,6 +35074,12 @@ function signedArea(data, start, end, dim) {
     return sum;
 }
 
+/**
+ * An implementation of the earcut polygon triangulation algorithm.
+ * The code is a port of [mapbox/earcut](https://github.com/mapbox/earcut).
+ *
+ * @see https://github.com/mapbox/earcut
+ */
 class Earcut {
 
 	/**
@@ -35116,6 +35230,7 @@ function addContour( vertices, contour ) {
  * ```
  *
  * @augments BufferGeometry
+ * @demo scenes/geometry-browser.html#ExtrudeGeometry
  */
 class ExtrudeGeometry extends BufferGeometry {
 
@@ -35204,7 +35319,7 @@ class ExtrudeGeometry extends BufferGeometry {
 
 				splineTube = extrudePath.computeFrenetFrames( steps, false );
 
-				// console.log(splineTube, 'splineTube', splineTube.normals.length, 'steps', steps, 'extrudePts', extrudePts.length);
+				// log(splineTube, 'splineTube', splineTube.normals.length, 'steps', steps, 'extrudePts', extrudePts.length);
 
 				binormal = new Vector3();
 				normal = new Vector3();
@@ -35309,7 +35424,7 @@ class ExtrudeGeometry extends BufferGeometry {
 
 			function scalePt2( pt, vec, size ) {
 
-				if ( ! vec ) console.error( 'THREE.ExtrudeGeometry: vec does not exist' );
+				if ( ! vec ) error( 'ExtrudeGeometry: vec does not exist' );
 
 				return pt.clone().addScaledVector( vec, size );
 
@@ -35424,14 +35539,14 @@ class ExtrudeGeometry extends BufferGeometry {
 
 					if ( direction_eq ) {
 
-						// console.log("Warning: lines are a straight sequence");
+						// log("Warning: lines are a straight sequence");
 						v_trans_x = - v_prev_y;
 						v_trans_y = v_prev_x;
 						shrink_by = Math.sqrt( v_prev_lensq );
 
 					} else {
 
-						// console.log("Warning: lines are a straight spike");
+						// log("Warning: lines are a straight spike");
 						v_trans_x = v_prev_x;
 						v_trans_y = v_prev_y;
 						shrink_by = Math.sqrt( v_prev_lensq / 2 );
@@ -35453,7 +35568,7 @@ class ExtrudeGeometry extends BufferGeometry {
 				if ( k === il ) k = 0;
 
 				//  (j)---(i)---(k)
-				// console.log('i,j,k', i, j , k)
+				// log('i,j,k', i, j , k)
 
 				contourMovements[ i ] = getBevelVec( contour[ i ], contour[ j ], contour[ k ] );
 
@@ -35750,7 +35865,7 @@ class ExtrudeGeometry extends BufferGeometry {
 					let k = i - 1;
 					if ( k < 0 ) k = contour.length - 1;
 
-					//console.log('b', i,j, i-1, k,vertices.length);
+					//log('b', i,j, i-1, k,vertices.length);
 
 					for ( let s = 0, sl = ( steps + bevelSegments * 2 ); s < sl; s ++ ) {
 
@@ -35990,6 +36105,7 @@ function toJSON$1( shapes, options, data ) {
  * ```
  *
  * @augments PolyhedronGeometry
+ * @demo scenes/geometry-browser.html#IcosahedronGeometry
  */
 class IcosahedronGeometry extends PolyhedronGeometry {
 
@@ -36064,6 +36180,7 @@ class IcosahedronGeometry extends PolyhedronGeometry {
  * ```
  *
  * @augments BufferGeometry
+ * @demo scenes/geometry-browser.html#LatheGeometry
  */
 class LatheGeometry extends BufferGeometry {
 
@@ -36281,6 +36398,7 @@ class LatheGeometry extends BufferGeometry {
  * ```
  *
  * @augments PolyhedronGeometry
+ * @demo scenes/geometry-browser.html#OctahedronGeometry
  */
 class OctahedronGeometry extends PolyhedronGeometry {
 
@@ -36347,6 +36465,7 @@ class OctahedronGeometry extends PolyhedronGeometry {
  * ```
  *
  * @augments BufferGeometry
+ * @demo scenes/geometry-browser.html#PlaneGeometry
  */
 class PlaneGeometry extends BufferGeometry {
 
@@ -36475,6 +36594,7 @@ class PlaneGeometry extends BufferGeometry {
  * ```
  *
  * @augments BufferGeometry
+ * @demo scenes/geometry-browser.html#RingGeometry
  */
 class RingGeometry extends BufferGeometry {
 
@@ -36636,6 +36756,7 @@ class RingGeometry extends BufferGeometry {
  * ```
  *
  * @augments BufferGeometry
+ * @demo scenes/geometry-browser.html#ShapeGeometry
  */
 class ShapeGeometry extends BufferGeometry {
 
@@ -36857,6 +36978,7 @@ function toJSON( shapes, data ) {
  * ```
  *
  * @augments BufferGeometry
+ * @demo scenes/geometry-browser.html#SphereGeometry
  */
 class SphereGeometry extends BufferGeometry {
 
@@ -37026,6 +37148,7 @@ class SphereGeometry extends BufferGeometry {
  * ```
  *
  * @augments PolyhedronGeometry
+ * @demo scenes/geometry-browser.html#TetrahedronGeometry
  */
 class TetrahedronGeometry extends PolyhedronGeometry {
 
@@ -37089,6 +37212,7 @@ class TetrahedronGeometry extends PolyhedronGeometry {
  * ```
  *
  * @augments BufferGeometry
+ * @demo scenes/geometry-browser.html#TorusGeometry
  */
 class TorusGeometry extends BufferGeometry {
 
@@ -37241,6 +37365,7 @@ class TorusGeometry extends BufferGeometry {
  * ```
  *
  * @augments BufferGeometry
+ * @demo scenes/geometry-browser.html#TorusKnotGeometry
  */
 class TorusKnotGeometry extends BufferGeometry {
 
@@ -37453,6 +37578,7 @@ class TorusKnotGeometry extends BufferGeometry {
  * ```
  *
  * @augments BufferGeometry
+ * @demo scenes/geometry-browser.html#TubeGeometry
  */
 class TubeGeometry extends BufferGeometry {
 
@@ -38028,6 +38154,7 @@ class RawShaderMaterial extends ShaderMaterial {
  * (pdf), by Brent Burley.
  *
  * @augments Material
+ * @demo scenes/material-browser.html#MeshStandardMaterial
  */
 class MeshStandardMaterial extends Material {
 
@@ -38437,6 +38564,7 @@ class MeshStandardMaterial extends Material {
  * best results, always specify an environment map when using this material.
  *
  * @augments MeshStandardMaterial
+ * @demo scenes/material-browser.html#MeshPhysicalMaterial
  */
 class MeshPhysicalMaterial extends MeshStandardMaterial {
 
@@ -38733,7 +38861,7 @@ class MeshPhysicalMaterial extends MeshStandardMaterial {
 	}
 
 	/**
-	 * The anisotropy strength.
+	 * The anisotropy strength, from `0.0` to `1.0`.
 	 *
 	 * @type {number}
 	 * @default 0
@@ -38955,6 +39083,7 @@ class MeshPhysicalMaterial extends MeshStandardMaterial {
  * some graphical accuracy.
  *
  * @augments Material
+ * @demo scenes/material-browser.html#MeshPhongMaterial
  */
 class MeshPhongMaterial extends Material {
 
@@ -39350,6 +39479,7 @@ class MeshPhongMaterial extends Material {
  * A material implementing toon shading.
  *
  * @augments Material
+ * @demo scenes/material-browser.html#MeshToonMaterial
  */
 class MeshToonMaterial extends Material {
 
@@ -39664,6 +39794,7 @@ class MeshToonMaterial extends Material {
  * A material that maps the normal vectors to RGB colors.
  *
  * @augments Material
+ * @demo scenes/material-browser.html#MeshNormalMaterial
  */
 class MeshNormalMaterial extends Material {
 
@@ -39844,6 +39975,7 @@ class MeshNormalMaterial extends Material {
  * {@link MeshPhysicalMaterial}, at the cost of some graphical accuracy.
  *
  * @augments Material
+ * @demo scenes/material-browser.html#MeshLambertMaterial
  */
 class MeshLambertMaterial extends Material {
 
@@ -40219,6 +40351,7 @@ class MeshLambertMaterial extends Material {
  * near and far plane. White is nearest, black is farthest.
  *
  * @augments Material
+ * @demo scenes/material-browser.html#MeshDepthMaterial
  */
 class MeshDepthMaterial extends Material {
 
@@ -40483,6 +40616,7 @@ class MeshDistanceMaterial extends Material {
  * shadows.
  *
  * @augments Material
+ * @demo scenes/material-browser.html#MeshMatcapMaterial
  */
 class MeshMatcapMaterial extends Material {
 
@@ -40635,6 +40769,24 @@ class MeshMatcapMaterial extends Material {
 		this.alphaMap = null;
 
 		/**
+		 * Renders the geometry as a wireframe.
+		 *
+		 * @type {boolean}
+		 * @default false
+		 */
+		this.wireframe = false;
+
+		/**
+		 * Controls the thickness of the wireframe.
+		 *
+		 * Can only be used with {@link SVGRenderer}.
+		 *
+		 * @type {number}
+		 * @default 1
+		 */
+		this.wireframeLinewidth = 1;
+
+		/**
 		 * Whether the material is rendered with flat shading or not.
 		 *
 		 * @type {boolean}
@@ -40679,6 +40831,9 @@ class MeshMatcapMaterial extends Material {
 		this.displacementBias = source.displacementBias;
 
 		this.alphaMap = source.alphaMap;
+
+		this.wireframe = source.wireframe;
+		this.wireframeLinewidth = source.wireframeLinewidth;
 
 		this.flatShading = source.flatShading;
 
@@ -42000,7 +42155,7 @@ class KeyframeTrack {
 
 			}
 
-			console.warn( 'THREE.KeyframeTrack:', message );
+			warn( 'KeyframeTrack:', message );
 			return this;
 
 		}
@@ -42160,7 +42315,7 @@ class KeyframeTrack {
 		const valueSize = this.getValueSize();
 		if ( valueSize - Math.floor( valueSize ) !== 0 ) {
 
-			console.error( 'THREE.KeyframeTrack: Invalid value size in track.', this );
+			error( 'KeyframeTrack: Invalid value size in track.', this );
 			valid = false;
 
 		}
@@ -42172,7 +42327,7 @@ class KeyframeTrack {
 
 		if ( nKeys === 0 ) {
 
-			console.error( 'THREE.KeyframeTrack: Track is empty.', this );
+			error( 'KeyframeTrack: Track is empty.', this );
 			valid = false;
 
 		}
@@ -42185,7 +42340,7 @@ class KeyframeTrack {
 
 			if ( typeof currTime === 'number' && isNaN( currTime ) ) {
 
-				console.error( 'THREE.KeyframeTrack: Time is not a valid number.', this, i, currTime );
+				error( 'KeyframeTrack: Time is not a valid number.', this, i, currTime );
 				valid = false;
 				break;
 
@@ -42193,7 +42348,7 @@ class KeyframeTrack {
 
 			if ( prevTime !== null && prevTime > currTime ) {
 
-				console.error( 'THREE.KeyframeTrack: Out of order keys.', this, i, currTime, prevTime );
+				error( 'KeyframeTrack: Out of order keys.', this, i, currTime, prevTime );
 				valid = false;
 				break;
 
@@ -42213,7 +42368,7 @@ class KeyframeTrack {
 
 					if ( isNaN( value ) ) {
 
-						console.error( 'THREE.KeyframeTrack: Value is not a valid number.', this, i, value );
+						error( 'KeyframeTrack: Value is not a valid number.', this, i, value );
 						valid = false;
 						break;
 
@@ -42983,11 +43138,11 @@ class AnimationClip {
 	 */
 	static parseAnimation( animation, bones ) {
 
-		console.warn( 'THREE.AnimationClip: parseAnimation() is deprecated and will be removed with r185' );
+		warn( 'AnimationClip: parseAnimation() is deprecated and will be removed with r185' );
 
 		if ( ! animation ) {
 
-			console.error( 'THREE.AnimationClip: No animation in JSONLoader data.' );
+			error( 'AnimationClip: No animation in JSONLoader data.' );
 			return null;
 
 		}
@@ -43339,7 +43494,7 @@ const Cache = {
 
 		if ( this.enabled === false ) return;
 
-		// console.log( 'THREE.Cache', 'Adding key:', key );
+		// log( 'Cache', 'Adding key:', key );
 
 		this.files[ key ] = file;
 
@@ -43356,7 +43511,7 @@ const Cache = {
 
 		if ( this.enabled === false ) return;
 
-		// console.log( 'THREE.Cache', 'Checking key:', key );
+		// log( 'Cache', 'Checking key:', key );
 
 		return this.files[ key ];
 
@@ -44053,7 +44208,7 @@ class FileLoader extends Loader {
 
 					if ( response.status === 0 ) {
 
-						console.warn( 'THREE.FileLoader: HTTP Status 0 received.' );
+						warn( 'FileLoader: HTTP Status 0 received.' );
 
 					}
 
@@ -44323,7 +44478,7 @@ class AnimationLoader extends Loader {
 
 				} else {
 
-					console.error( e );
+					error( e );
 
 				}
 
@@ -44827,7 +44982,7 @@ class DataTextureLoader extends Loader {
 
 				} else {
 
-					console.error( error );
+					error( error );
 					return;
 
 				}
@@ -46925,7 +47080,7 @@ class MaterialLoader extends Loader {
 
 				} else {
 
-					console.error( e );
+					error( e );
 
 				}
 
@@ -46951,7 +47106,7 @@ class MaterialLoader extends Loader {
 
 			if ( textures[ name ] === undefined ) {
 
-				console.warn( 'THREE.MaterialLoader: Undefined texture', name );
+				warn( 'MaterialLoader: Undefined texture', name );
 
 			}
 
@@ -47443,7 +47598,7 @@ class BufferGeometryLoader extends Loader {
 
 				} else {
 
-					console.error( e );
+					error( e );
 
 				}
 
@@ -47675,7 +47830,7 @@ class ObjectLoader extends Loader {
 
 				if ( onError !== undefined ) onError( error );
 
-				console.error( 'THREE:ObjectLoader: Can\'t parse ' + url + '.', error.message );
+				error( 'ObjectLoader: Can\'t parse ' + url + '.', error.message );
 
 				return;
 
@@ -47687,7 +47842,7 @@ class ObjectLoader extends Loader {
 
 				if ( onError !== undefined ) onError( new Error( 'THREE.ObjectLoader: Can\'t load ' + url ) );
 
-				console.error( 'THREE.ObjectLoader: Can\'t load ' + url );
+				error( 'ObjectLoader: Can\'t load ' + url );
 				return;
 
 			}
@@ -47897,7 +48052,7 @@ class ObjectLoader extends Loader {
 
 						} else {
 
-							console.warn( `THREE.ObjectLoader: Unsupported geometry type "${ data.type }"` );
+							warn( `ObjectLoader: Unsupported geometry type "${ data.type }"` );
 
 						}
 
@@ -48188,7 +48343,7 @@ class ObjectLoader extends Loader {
 
 			if ( typeof value === 'number' ) return value;
 
-			console.warn( 'THREE.ObjectLoader.parseTexture: Constant should be in numeric form.', value );
+			warn( 'ObjectLoader.parseTexture: Constant should be in numeric form.', value );
 
 			return type[ value ];
 
@@ -48204,13 +48359,13 @@ class ObjectLoader extends Loader {
 
 				if ( data.image === undefined ) {
 
-					console.warn( 'THREE.ObjectLoader: No "image" specified for', data.uuid );
+					warn( 'ObjectLoader: No "image" specified for', data.uuid );
 
 				}
 
 				if ( images[ data.image ] === undefined ) {
 
-					console.warn( 'THREE.ObjectLoader: Undefined image', data.image );
+					warn( 'ObjectLoader: Undefined image', data.image );
 
 				}
 
@@ -48298,7 +48453,7 @@ class ObjectLoader extends Loader {
 
 			if ( geometries[ name ] === undefined ) {
 
-				console.warn( 'THREE.ObjectLoader: Undefined geometry', name );
+				warn( 'ObjectLoader: Undefined geometry', name );
 
 			}
 
@@ -48320,7 +48475,7 @@ class ObjectLoader extends Loader {
 
 					if ( materials[ uuid ] === undefined ) {
 
-						console.warn( 'THREE.ObjectLoader: Undefined material', uuid );
+						warn( 'ObjectLoader: Undefined material', uuid );
 
 					}
 
@@ -48334,7 +48489,7 @@ class ObjectLoader extends Loader {
 
 			if ( materials[ name ] === undefined ) {
 
-				console.warn( 'THREE.ObjectLoader: Undefined material', name );
+				warn( 'ObjectLoader: Undefined material', name );
 
 			}
 
@@ -48346,7 +48501,7 @@ class ObjectLoader extends Loader {
 
 			if ( textures[ uuid ] === undefined ) {
 
-				console.warn( 'THREE.ObjectLoader: Undefined texture', uuid );
+				warn( 'ObjectLoader: Undefined texture', uuid );
 
 			}
 
@@ -48747,7 +48902,7 @@ class ObjectLoader extends Loader {
 
 				if ( skeleton === undefined ) {
 
-					console.warn( 'THREE.ObjectLoader: No skeleton found with UUID:', child.skeleton );
+					warn( 'ObjectLoader: No skeleton found with UUID:', child.skeleton );
 
 				} else {
 
@@ -48860,13 +49015,13 @@ class ImageBitmapLoader extends Loader {
 
 		if ( typeof createImageBitmap === 'undefined' ) {
 
-			console.warn( 'THREE.ImageBitmapLoader: createImageBitmap() not supported.' );
+			warn( 'ImageBitmapLoader: createImageBitmap() not supported.' );
 
 		}
 
 		if ( typeof fetch === 'undefined' ) {
 
-			console.warn( 'THREE.ImageBitmapLoader: fetch() not supported.' );
+			warn( 'ImageBitmapLoader: fetch() not supported.' );
 
 		}
 
@@ -49146,7 +49301,7 @@ class AudioLoader extends Loader {
 
 			} else {
 
-				console.error( e );
+				error( e );
 
 			}
 
@@ -50000,14 +50155,14 @@ class Audio extends Object3D {
 
 		if ( this.isPlaying === true ) {
 
-			console.warn( 'THREE.Audio: Audio is already playing.' );
+			warn( 'Audio: Audio is already playing.' );
 			return;
 
 		}
 
 		if ( this.hasPlaybackControl === false ) {
 
-			console.warn( 'THREE.Audio: this Audio has no playback control.' );
+			warn( 'Audio: this Audio has no playback control.' );
 			return;
 
 		}
@@ -50044,7 +50199,7 @@ class Audio extends Object3D {
 
 		if ( this.hasPlaybackControl === false ) {
 
-			console.warn( 'THREE.Audio: this Audio has no playback control.' );
+			warn( 'Audio: this Audio has no playback control.' );
 			return;
 
 		}
@@ -50086,7 +50241,7 @@ class Audio extends Object3D {
 
 		if ( this.hasPlaybackControl === false ) {
 
-			console.warn( 'THREE.Audio: this Audio has no playback control.' );
+			warn( 'Audio: this Audio has no playback control.' );
 			return;
 
 		}
@@ -50279,7 +50434,7 @@ class Audio extends Object3D {
 
 		if ( this.hasPlaybackControl === false ) {
 
-			console.warn( 'THREE.Audio: this Audio has no playback control.' );
+			warn( 'Audio: this Audio has no playback control.' );
 			return;
 
 		}
@@ -50328,7 +50483,7 @@ class Audio extends Object3D {
 
 		if ( this.hasPlaybackControl === false ) {
 
-			console.warn( 'THREE.Audio: this Audio has no playback control.' );
+			warn( 'Audio: this Audio has no playback control.' );
 			return false;
 
 		}
@@ -50349,7 +50504,7 @@ class Audio extends Object3D {
 
 		if ( this.hasPlaybackControl === false ) {
 
-			console.warn( 'THREE.Audio: this Audio has no playback control.' );
+			warn( 'Audio: this Audio has no playback control.' );
 			return;
 
 		}
@@ -50427,7 +50582,7 @@ class Audio extends Object3D {
 
 		if ( source.sourceType !== 'buffer' ) {
 
-			console.warn( 'THREE.Audio: Audio source type cannot be copied.' );
+			warn( 'Audio: Audio source type cannot be copied.' );
 
 			return this;
 
@@ -51694,7 +51849,7 @@ class PropertyBinding {
 		// ensure there is a value node
 		if ( ! targetObject ) {
 
-			console.warn( 'THREE.PropertyBinding: No target node found for track: ' + this.path + '.' );
+			warn( 'PropertyBinding: No target node found for track: ' + this.path + '.' );
 			return;
 
 		}
@@ -51710,14 +51865,14 @@ class PropertyBinding {
 
 					if ( ! targetObject.material ) {
 
-						console.error( 'THREE.PropertyBinding: Can not bind to material as node does not have a material.', this );
+						error( 'PropertyBinding: Can not bind to material as node does not have a material.', this );
 						return;
 
 					}
 
 					if ( ! targetObject.material.materials ) {
 
-						console.error( 'THREE.PropertyBinding: Can not bind to material.materials as node.material does not have a materials array.', this );
+						error( 'PropertyBinding: Can not bind to material.materials as node.material does not have a materials array.', this );
 						return;
 
 					}
@@ -51730,7 +51885,7 @@ class PropertyBinding {
 
 					if ( ! targetObject.skeleton ) {
 
-						console.error( 'THREE.PropertyBinding: Can not bind to bones as node does not have a skeleton.', this );
+						error( 'PropertyBinding: Can not bind to bones as node does not have a skeleton.', this );
 						return;
 
 					}
@@ -51765,14 +51920,14 @@ class PropertyBinding {
 
 					if ( ! targetObject.material ) {
 
-						console.error( 'THREE.PropertyBinding: Can not bind to material as node does not have a material.', this );
+						error( 'PropertyBinding: Can not bind to material as node does not have a material.', this );
 						return;
 
 					}
 
 					if ( ! targetObject.material.map ) {
 
-						console.error( 'THREE.PropertyBinding: Can not bind to material.map as node.material does not have a map.', this );
+						error( 'PropertyBinding: Can not bind to material.map as node.material does not have a map.', this );
 						return;
 
 					}
@@ -51784,7 +51939,7 @@ class PropertyBinding {
 
 					if ( targetObject[ objectName ] === undefined ) {
 
-						console.error( 'THREE.PropertyBinding: Can not bind to objectName of node undefined.', this );
+						error( 'PropertyBinding: Can not bind to objectName of node undefined.', this );
 						return;
 
 					}
@@ -51798,7 +51953,7 @@ class PropertyBinding {
 
 				if ( targetObject[ objectIndex ] === undefined ) {
 
-					console.error( 'THREE.PropertyBinding: Trying to bind to objectIndex of objectName, but is undefined.', this, targetObject );
+					error( 'PropertyBinding: Trying to bind to objectIndex of objectName, but is undefined.', this, targetObject );
 					return;
 
 				}
@@ -51816,7 +51971,7 @@ class PropertyBinding {
 
 			const nodeName = parsedPath.nodeName;
 
-			console.error( 'THREE.PropertyBinding: Trying to update property for track: ' + nodeName +
+			error( 'PropertyBinding: Trying to update property for track: ' + nodeName +
 				'.' + propertyName + ' but it wasn\'t found.', targetObject );
 			return;
 
@@ -51851,14 +52006,14 @@ class PropertyBinding {
 				// support resolving morphTarget names into indices.
 				if ( ! targetObject.geometry ) {
 
-					console.error( 'THREE.PropertyBinding: Can not bind to morphTargetInfluences because node does not have a geometry.', this );
+					error( 'PropertyBinding: Can not bind to morphTargetInfluences because node does not have a geometry.', this );
 					return;
 
 				}
 
 				if ( ! targetObject.geometry.morphAttributes ) {
 
-					console.error( 'THREE.PropertyBinding: Can not bind to morphTargetInfluences because node does not have a geometry.morphAttributes.', this );
+					error( 'PropertyBinding: Can not bind to morphTargetInfluences because node does not have a geometry.morphAttributes.', this );
 					return;
 
 				}
@@ -52150,7 +52305,7 @@ class AnimationObjectGroup {
 
 			} else if ( objects[ index ] !== knownObject ) {
 
-				console.error( 'THREE.AnimationObjectGroup: Different objects with the same UUID ' +
+				error( 'AnimationObjectGroup: Different objects with the same UUID ' +
 					'detected. Clean the caches or recreate your infrastructure when reloading scenes.' );
 
 			} // else the object is already where we want it to be
@@ -53945,7 +54100,7 @@ class AnimationMixer extends EventDispatcher {
 	/**
 	 * Deactivates all previously scheduled actions on this mixer.
 	 *
-	 * @return {AnimationMixer} A reference to thi animation mixer.
+	 * @return {AnimationMixer} A reference to this animation mixer.
 	 */
 	stopAllAction() {
 
@@ -53969,7 +54124,7 @@ class AnimationMixer extends EventDispatcher {
 	 * time from {@link Clock} or {@link Timer}.
 	 *
 	 * @param {number} deltaTime - The delta time in seconds.
-	 * @return {AnimationMixer} A reference to thi animation mixer.
+	 * @return {AnimationMixer} A reference to this animation mixer.
 	 */
 	update( deltaTime ) {
 
@@ -54015,7 +54170,7 @@ class AnimationMixer extends EventDispatcher {
 	 * input parameter will be scaled by {@link AnimationMixer#timeScale}
 	 *
 	 * @param {number} time - The time to set in seconds.
-	 * @return {AnimationMixer} A reference to thi animation mixer.
+	 * @return {AnimationMixer} A reference to this animation mixer.
 	 */
 	setTime( time ) {
 
@@ -54790,7 +54945,7 @@ class Raycaster {
 
 		} else {
 
-			console.error( 'THREE.Raycaster: Unsupported camera type: ' + camera.type );
+			error( 'Raycaster: Unsupported camera type: ' + camera.type );
 
 		}
 
@@ -58217,7 +58372,7 @@ class ShapePath {
 		let holesFirst = ! isClockWise( subPaths[ 0 ].getPoints() );
 		holesFirst = isCCW ? ! holesFirst : holesFirst;
 
-		// console.log("Holes first", holesFirst);
+		// log("Holes first", holesFirst);
 
 		const betterShapeHoles = [];
 		const newShapes = [];
@@ -58245,13 +58400,13 @@ class ShapePath {
 				if ( holesFirst )	mainIdx ++;
 				newShapeHoles[ mainIdx ] = [];
 
-				//console.log('cw', i);
+				//log('cw', i);
 
 			} else {
 
 				newShapeHoles[ mainIdx ].push( { h: tmpPath, p: tmpPoints[ 0 ] } );
 
-				//console.log('ccw', i);
+				//log('ccw', i);
 
 			}
 
@@ -58336,7 +58491,7 @@ class ShapePath {
 
 		}
 
-		//console.log("shape", shapes);
+		//log("shape", shapes);
 
 		return shapes;
 
@@ -58356,7 +58511,7 @@ class Controls extends EventDispatcher {
 	 * Constructs a new controls instance.
 	 *
 	 * @param {Object3D} object - The object that is managed by the controls.
-	 * @param {?HTMLDOMElement} domElement - The HTML element used for event listeners.
+	 * @param {?HTMLElement} domElement - The HTML element used for event listeners.
 	 */
 	constructor( object, domElement = null ) {
 
@@ -58372,7 +58527,7 @@ class Controls extends EventDispatcher {
 		/**
 		 * The HTML element used for event listeners.
 		 *
-		 * @type {?HTMLDOMElement}
+		 * @type {?HTMLElement}
 		 * @default null
 		 */
 		this.domElement = domElement;
@@ -58422,13 +58577,13 @@ class Controls extends EventDispatcher {
 	 * Connects the controls to the DOM. This method has so called "side effects" since
 	 * it adds the module's event listeners to the DOM.
 	 *
-	 * @param {HTMLDOMElement} element - The DOM element to connect to.
+	 * @param {HTMLElement} element - The DOM element to connect to.
 	 */
 	connect( element ) {
 
 		if ( element === undefined ) {
 
-			console.warn( 'THREE.Controls: connect() now requires an element.' ); // @deprecated, the warning can be removed with r185
+			warn( 'Controls: connect() now requires an element.' ); // @deprecated, the warning can be removed with r185
 			return;
 
 		}
@@ -58762,7 +58917,7 @@ if ( typeof window !== 'undefined' ) {
 
 	if ( window.__THREE__ ) {
 
-		console.warn( 'WARNING: Multiple instances of Three.js being imported.' );
+		warn( 'WARNING: Multiple instances of Three.js being imported.' );
 
 	} else {
 
@@ -61115,7 +61270,7 @@ function WebGLCapabilities( gl, extensions, parameters, utils ) {
 
 	if ( maxPrecision !== precision ) {
 
-		console.warn( 'THREE.WebGLRenderer:', precision, 'not supported, using', maxPrecision, 'instead.' );
+		warn( 'WebGLRenderer:', precision, 'not supported, using', maxPrecision, 'instead.' );
 		precision = maxPrecision;
 
 	}
@@ -61952,7 +62107,7 @@ class PMREMGenerator {
 
 		if ( direction !== 'latitudinal' && direction !== 'longitudinal' ) {
 
-			console.error(
+			error(
 				'blur direction must be either latitudinal or longitudinal!' );
 
 		}
@@ -61970,7 +62125,7 @@ class PMREMGenerator {
 
 		if ( samples > MAX_SAMPLES ) {
 
-			console.warn( `sigmaRadians, ${
+			warn( `sigmaRadians, ${
 				sigmaRadians}, is too large and will clip, as it requested ${
 				samples} samples when the maximum is set to ${MAX_SAMPLES}` );
 
@@ -62567,7 +62722,7 @@ function WebGLExtensions( gl ) {
 
 			if ( extension === null ) {
 
-				warnOnce( 'THREE.WebGLRenderer: ' + name + ' extension not supported.' );
+				warnOnce( 'WebGLRenderer: ' + name + ' extension not supported.' );
 
 			}
 
@@ -62897,7 +63052,7 @@ function WebGLInfo( gl ) {
 				break;
 
 			default:
-				console.error( 'THREE.WebGLInfo: Unknown draw mode:', mode );
+				error( 'WebGLInfo: Unknown draw mode:', mode );
 				break;
 
 		}
@@ -64386,7 +64541,7 @@ function getEncodingComponents( colorSpace ) {
 			return [ encodingMatrix, 'sRGBTransferOETF' ];
 
 		default:
-			console.warn( 'THREE.WebGLProgram: Unsupported color space: ', colorSpace );
+			warn( 'WebGLProgram: Unsupported color space: ', colorSpace );
 			return [ encodingMatrix, 'LinearTransferOETF' ];
 
 	}
@@ -64406,7 +64561,7 @@ function getShaderErrors( gl, shader, type ) {
 	if ( errorMatches ) {
 
 		// --enable-privileged-webgl-extension
-		// console.log( '**' + type + '**', gl.getExtension( 'WEBGL_debug_shaders' ).getTranslatedShaderSource( shader ) );
+		// log( '**' + type + '**', gl.getExtension( 'WEBGL_debug_shaders' ).getTranslatedShaderSource( shader ) );
 
 		const errorLine = parseInt( errorMatches[ 1 ] );
 		return type.toUpperCase() + '\n\n' + errors + '\n\n' + handleSource( gl.getShaderSource( shader ), errorLine );
@@ -64470,7 +64625,7 @@ function getToneMappingFunction( functionName, toneMapping ) {
 			break;
 
 		default:
-			console.warn( 'THREE.WebGLProgram: Unsupported toneMapping:', toneMapping );
+			warn( 'WebGLProgram: Unsupported toneMapping:', toneMapping );
 			toneMappingName = 'Linear';
 
 	}
@@ -64548,7 +64703,7 @@ function fetchAttributeLocations( gl, program ) {
 		if ( info.type === gl.FLOAT_MAT3 ) locationSize = 3;
 		if ( info.type === gl.FLOAT_MAT4 ) locationSize = 4;
 
-		// console.log( 'THREE.WebGLProgram: ACTIVE VERTEX ATTRIBUTE:', name, i );
+		// log( 'WebGLProgram: ACTIVE VERTEX ATTRIBUTE:', name, i );
 
 		attributes[ name ] = {
 			type: info.type,
@@ -64618,7 +64773,7 @@ function includeReplacer( match, include ) {
 		if ( newInclude !== undefined ) {
 
 			string = ShaderChunk[ newInclude ];
-			console.warn( 'THREE.WebGLRenderer: Shader chunk "%s" has been deprecated. Use "%s" instead.', include, newInclude );
+			warn( 'WebGLRenderer: Shader chunk "%s" has been deprecated. Use "%s" instead.', include, newInclude );
 
 		} else {
 
@@ -64814,7 +64969,7 @@ function generateCubeUVSize( parameters ) {
 function WebGLProgram( renderer, cacheKey, parameters, bindingStates ) {
 
 	// TODO Send this event to Three.js DevTools
-	// console.log( 'WebGLProgram', cacheKey );
+	// log( 'WebGLProgram', cacheKey );
 
 	const gl = renderer.getContext();
 
@@ -65230,8 +65385,8 @@ function WebGLProgram( renderer, cacheKey, parameters, bindingStates ) {
 	const vertexGlsl = versionString + prefixVertex + vertexShader;
 	const fragmentGlsl = versionString + prefixFragment + fragmentShader;
 
-	// console.log( '*VERTEX*', vertexGlsl );
-	// console.log( '*FRAGMENT*', fragmentGlsl );
+	// log( '*VERTEX*', vertexGlsl );
+	// log( '*FRAGMENT*', fragmentGlsl );
 
 	const glVertexShader = WebGLShader( gl, gl.VERTEX_SHADER, vertexGlsl );
 	const glFragmentShader = WebGLShader( gl, gl.FRAGMENT_SHADER, fragmentGlsl );
@@ -65285,7 +65440,7 @@ function WebGLProgram( renderer, cacheKey, parameters, bindingStates ) {
 					const vertexErrors = getShaderErrors( gl, glVertexShader, 'vertex' );
 					const fragmentErrors = getShaderErrors( gl, glFragmentShader, 'fragment' );
 
-					console.error(
+					error(
 						'THREE.WebGLProgram: Shader Error ' + gl.getError() + ' - ' +
 						'VALIDATE_STATUS ' + gl.getProgramParameter( program, gl.VALIDATE_STATUS ) + '\n\n' +
 						'Material Name: ' + self.name + '\n' +
@@ -65299,7 +65454,7 @@ function WebGLProgram( renderer, cacheKey, parameters, bindingStates ) {
 
 			} else if ( programLog !== '' ) {
 
-				console.warn( 'THREE.WebGLProgram: Program Info Log:', programLog );
+				warn( 'WebGLProgram: Program Info Log:', programLog );
 
 			} else if ( vertexLog === '' || fragmentLog === '' ) {
 
@@ -65609,7 +65764,7 @@ function WebGLPrograms( renderer, cubemaps, cubeuvmaps, extensions, capabilities
 
 			if ( precision !== material.precision ) {
 
-				console.warn( 'THREE.WebGLProgram.getParameters:', material.precision, 'not supported, using', precision, 'instead.' );
+				warn( 'WebGLProgram.getParameters:', material.precision, 'not supported, using', precision, 'instead.' );
 
 			}
 
@@ -67267,7 +67422,7 @@ function WebGLShadowMap( renderer, objects, capabilities ) {
 
 			if ( shadow === undefined ) {
 
-				console.warn( 'THREE.WebGLShadowMap:', light, 'has no shadow.' );
+				warn( 'WebGLShadowMap:', light, 'has no shadow.' );
 				continue;
 
 			}
@@ -68255,7 +68410,7 @@ function WebGLState( gl, extensions ) {
 							break;
 
 						default:
-							console.error( 'THREE.WebGLState: Invalid blending: ', blending );
+							error( 'WebGLState: Invalid blending: ', blending );
 							break;
 
 					}
@@ -68273,15 +68428,15 @@ function WebGLState( gl, extensions ) {
 							break;
 
 						case SubtractiveBlending:
-							console.error( 'THREE.WebGLState: SubtractiveBlending requires material.premultipliedAlpha = true' );
+							error( 'WebGLState: SubtractiveBlending requires material.premultipliedAlpha = true' );
 							break;
 
 						case MultiplyBlending:
-							console.error( 'THREE.WebGLState: MultiplyBlending requires material.premultipliedAlpha = true' );
+							error( 'WebGLState: MultiplyBlending requires material.premultipliedAlpha = true' );
 							break;
 
 						default:
-							console.error( 'THREE.WebGLState: Invalid blending: ', blending );
+							error( 'WebGLState: Invalid blending: ', blending );
 							break;
 
 					}
@@ -68568,7 +68723,7 @@ function WebGLState( gl, extensions ) {
 
 		} catch ( error ) {
 
-			console.error( 'THREE.WebGLState:', error );
+			error( 'WebGLState:', error );
 
 		}
 
@@ -68582,7 +68737,7 @@ function WebGLState( gl, extensions ) {
 
 		} catch ( error ) {
 
-			console.error( 'THREE.WebGLState:', error );
+			error( 'WebGLState:', error );
 
 		}
 
@@ -68596,7 +68751,7 @@ function WebGLState( gl, extensions ) {
 
 		} catch ( error ) {
 
-			console.error( 'THREE.WebGLState:', error );
+			error( 'WebGLState:', error );
 
 		}
 
@@ -68610,7 +68765,7 @@ function WebGLState( gl, extensions ) {
 
 		} catch ( error ) {
 
-			console.error( 'THREE.WebGLState:', error );
+			error( 'WebGLState:', error );
 
 		}
 
@@ -68624,7 +68779,7 @@ function WebGLState( gl, extensions ) {
 
 		} catch ( error ) {
 
-			console.error( 'THREE.WebGLState:', error );
+			error( 'WebGLState:', error );
 
 		}
 
@@ -68638,7 +68793,7 @@ function WebGLState( gl, extensions ) {
 
 		} catch ( error ) {
 
-			console.error( 'THREE.WebGLState:', error );
+			error( 'WebGLState:', error );
 
 		}
 
@@ -68652,7 +68807,7 @@ function WebGLState( gl, extensions ) {
 
 		} catch ( error ) {
 
-			console.error( 'THREE.WebGLState:', error );
+			error( 'WebGLState:', error );
 
 		}
 
@@ -68666,7 +68821,7 @@ function WebGLState( gl, extensions ) {
 
 		} catch ( error ) {
 
-			console.error( 'THREE.WebGLState:', error );
+			error( 'WebGLState:', error );
 
 		}
 
@@ -68680,7 +68835,7 @@ function WebGLState( gl, extensions ) {
 
 		} catch ( error ) {
 
-			console.error( 'THREE.WebGLState:', error );
+			error( 'WebGLState:', error );
 
 		}
 
@@ -68694,7 +68849,7 @@ function WebGLState( gl, extensions ) {
 
 		} catch ( error ) {
 
-			console.error( 'THREE.WebGLState:', error );
+			error( 'WebGLState:', error );
 
 		}
 
@@ -68991,7 +69146,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
 				const context = canvas.getContext( '2d' );
 				context.drawImage( image, 0, 0, width, height );
 
-				console.warn( 'THREE.WebGLRenderer: Texture has been resized from (' + dimensions.width + 'x' + dimensions.height + ') to (' + width + 'x' + height + ').' );
+				warn( 'WebGLRenderer: Texture has been resized from (' + dimensions.width + 'x' + dimensions.height + ') to (' + width + 'x' + height + ').' );
 
 				return canvas;
 
@@ -68999,7 +69154,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
 
 				if ( 'data' in image ) {
 
-					console.warn( 'THREE.WebGLRenderer: Image in DataTexture is too big (' + dimensions.width + 'x' + dimensions.height + ').' );
+					warn( 'WebGLRenderer: Image in DataTexture is too big (' + dimensions.width + 'x' + dimensions.height + ').' );
 
 				}
 
@@ -69040,7 +69195,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
 
 			if ( _gl[ internalFormatName ] !== undefined ) return _gl[ internalFormatName ];
 
-			console.warn( 'THREE.WebGLRenderer: Attempt to use non-existing WebGL internal format \'' + internalFormatName + '\'' );
+			warn( 'WebGLRenderer: Attempt to use non-existing WebGL internal format \'' + internalFormatName + '\'' );
 
 		}
 
@@ -69153,7 +69308,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
 			} else if ( depthType === UnsignedShortType ) {
 
 				glInternalFormat = _gl.DEPTH24_STENCIL8;
-				console.warn( 'DepthTexture: 16 bit depth attachment is not supported with stencil. Using 24-bit attachment.' );
+				warn( 'DepthTexture: 16 bit depth attachment is not supported with stencil. Using 24-bit attachment.' );
 
 			}
 
@@ -69383,7 +69538,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
 
 		if ( textureUnit >= capabilities.maxTextures ) {
 
-			console.warn( 'THREE.WebGLTextures: Trying to use ' + textureUnit + ' texture units while this GPU supports only ' + capabilities.maxTextures );
+			warn( 'WebGLTextures: Trying to use ' + textureUnit + ' texture units while this GPU supports only ' + capabilities.maxTextures );
 
 		}
 
@@ -69430,11 +69585,11 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
 
 			if ( image === null ) {
 
-				console.warn( 'THREE.WebGLRenderer: Texture marked for update but no image data found.' );
+				warn( 'WebGLRenderer: Texture marked for update but no image data found.' );
 
 			} else if ( image.complete === false ) {
 
-				console.warn( 'THREE.WebGLRenderer: Texture marked for update but image is incomplete' );
+				warn( 'WebGLRenderer: Texture marked for update but image is incomplete' );
 
 			} else {
 
@@ -69461,6 +69616,10 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
 
 			uploadTexture( textureProperties, texture, slot );
 			return;
+
+		} else if ( texture.isExternalTexture ) {
+
+			textureProperties.__webglTexture = texture.sourceTexture ? texture.sourceTexture : null;
 
 		}
 
@@ -69531,7 +69690,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
 			( texture.magFilter === LinearFilter || texture.magFilter === LinearMipmapNearestFilter || texture.magFilter === NearestMipmapLinearFilter || texture.magFilter === LinearMipmapLinearFilter ||
 			texture.minFilter === LinearFilter || texture.minFilter === LinearMipmapNearestFilter || texture.minFilter === NearestMipmapLinearFilter || texture.minFilter === LinearMipmapLinearFilter ) ) {
 
-			console.warn( 'THREE.WebGLRenderer: Unable to use linear filtering with floating point textures. OES_texture_float_linear not supported on this device.' );
+			warn( 'WebGLRenderer: Unable to use linear filtering with floating point textures. OES_texture_float_linear not supported on this device.' );
 
 		}
 
@@ -69940,7 +70099,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
 
 							} else {
 
-								console.warn( 'THREE.WebGLRenderer: Attempt to load unsupported compressed texture format in .uploadTexture()' );
+								warn( 'WebGLRenderer: Attempt to load unsupported compressed texture format in .uploadTexture()' );
 
 							}
 
@@ -69996,7 +70155,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
 
 							} else {
 
-								console.warn( 'THREE.WebGLRenderer: Attempt to load unsupported compressed texture format in .uploadTexture()' );
+								warn( 'WebGLRenderer: Attempt to load unsupported compressed texture format in .uploadTexture()' );
 
 							}
 
@@ -70290,7 +70449,7 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
 
 							} else {
 
-								console.warn( 'THREE.WebGLRenderer: Attempt to load unsupported compressed texture format in .setTextureCube()' );
+								warn( 'WebGLRenderer: Attempt to load unsupported compressed texture format in .setTextureCube()' );
 
 							}
 
@@ -71183,13 +71342,13 @@ function WebGLTextures( _gl, extensions, state, properties, capabilities, utils,
 
 				if ( format !== RGBAFormat || type !== UnsignedByteType ) {
 
-					console.warn( 'THREE.WebGLTextures: sRGB encoded textures have to use RGBAFormat and UnsignedByteType.' );
+					warn( 'WebGLTextures: sRGB encoded textures have to use RGBAFormat and UnsignedByteType.' );
 
 				}
 
 			} else {
 
-				console.error( 'THREE.WebGLTextures: Unsupported texture color space:', colorSpace );
+				error( 'WebGLTextures: Unsupported texture color space:', colorSpace );
 
 			}
 
@@ -71865,7 +72024,7 @@ class WebXRManager extends EventDispatcher {
 
 			if ( scope.isPresenting === true ) {
 
-				console.warn( 'THREE.WebXRManager: Cannot change framebuffer scale while presenting.' );
+				warn( 'WebXRManager: Cannot change framebuffer scale while presenting.' );
 
 			}
 
@@ -71887,7 +72046,7 @@ class WebXRManager extends EventDispatcher {
 
 			if ( scope.isPresenting === true ) {
 
-				console.warn( 'THREE.WebXRManager: Cannot change reference space type while presenting.' );
+				warn( 'WebXRManager: Cannot change reference space type while presenting.' );
 
 			}
 
@@ -73353,7 +73512,7 @@ function WebGLUniformsGroups( gl, info, capabilities, state ) {
 
 		}
 
-		console.error( 'THREE.WebGLRenderer: Maximum number of simultaneously usable uniforms groups reached.' );
+		error( 'WebGLRenderer: Maximum number of simultaneously usable uniforms groups reached.' );
 
 		return 0;
 
@@ -73608,11 +73767,11 @@ function WebGLUniformsGroups( gl, info, capabilities, state ) {
 
 		} else if ( value.isTexture ) {
 
-			console.warn( 'THREE.WebGLRenderer: Texture samplers can not be part of an uniforms group.' );
+			warn( 'WebGLRenderer: Texture samplers can not be part of an uniforms group.' );
 
 		} else {
 
-			console.warn( 'THREE.WebGLRenderer: Unsupported uniform value type.', value );
+			warn( 'WebGLRenderer: Unsupported uniform value type.', value );
 
 		}
 
@@ -73737,7 +73896,7 @@ class WebGLRenderer {
 		 * document.body.appendChild( renderer.domElement );
 		 * ```
 		 *
-		 * @type {DOMElement}
+		 * @type {HTMLCanvasElement|OffscreenCanvas}
 		 */
 		this.domElement = canvas;
 
@@ -73990,7 +74149,7 @@ class WebGLRenderer {
 
 		} catch ( error ) {
 
-			console.error( 'THREE.WebGLRenderer: ' + error.message );
+			error( 'WebGLRenderer: ' + error.message );
 			throw error;
 
 		}
@@ -74227,7 +74386,7 @@ class WebGLRenderer {
 
 			if ( xr.isPresenting ) {
 
-				console.warn( 'THREE.WebGLRenderer: Can\'t change size while VR device is presenting.' );
+				warn( 'WebGLRenderer: Can\'t change size while VR device is presenting.' );
 				return;
 
 			}
@@ -74619,7 +74778,7 @@ class WebGLRenderer {
 
 			event.preventDefault();
 
-			console.log( 'THREE.WebGLRenderer: Context Lost.' );
+			log( 'WebGLRenderer: Context Lost.' );
 
 			_isContextLost = true;
 
@@ -74627,7 +74786,7 @@ class WebGLRenderer {
 
 		function onContextRestore( /* event */ ) {
 
-			console.log( 'THREE.WebGLRenderer: Context Restored.' );
+			log( 'WebGLRenderer: Context Restored.' );
 
 			_isContextLost = false;
 
@@ -74649,7 +74808,7 @@ class WebGLRenderer {
 
 		function onContextCreationError( event ) {
 
-			console.error( 'THREE.WebGLRenderer: A WebGL context could not be created. Reason: ', event.statusMessage );
+			error( 'WebGLRenderer: A WebGL context could not be created. Reason: ', event.statusMessage );
 
 		}
 
@@ -74822,7 +74981,7 @@ class WebGLRenderer {
 				if ( object._multiDrawInstances !== null ) {
 
 					// @deprecated, r174
-					warnOnce( 'THREE.WebGLRenderer: renderMultiDrawInstances has been deprecated and will be removed in r184. Append to renderMultiDraw arguments and use indirection.' );
+					warnOnce( 'WebGLRenderer: renderMultiDrawInstances has been deprecated and will be removed in r184. Append to renderMultiDraw arguments and use indirection.' );
 					renderer.renderMultiDrawInstances( object._multiDrawStarts, object._multiDrawCounts, object._multiDrawCount, object._multiDrawInstances );
 
 				} else {
@@ -75098,6 +75257,13 @@ class WebGLRenderer {
 
 		if ( typeof self !== 'undefined' ) animation.setContext( self );
 
+		/**
+		 * Applications are advised to always define the animation loop
+		 * with this method and not manually with `requestAnimationFrame()`
+		 * for best compatibility.
+		 *
+		 * @param {?onAnimationCallback} callback - The application's animation loop.
+		 */
 		this.setAnimationLoop = function ( callback ) {
 
 			onAnimationFrameCallback = callback;
@@ -75130,7 +75296,7 @@ class WebGLRenderer {
 
 			if ( camera !== undefined && camera.isCamera !== true ) {
 
-				console.error( 'THREE.WebGLRenderer.render: camera is not an instance of THREE.Camera.' );
+				error( 'WebGLRenderer.render: camera is not an instance of THREE.Camera.' );
 				return;
 
 			}
@@ -76456,7 +76622,7 @@ class WebGLRenderer {
 
 			if ( ! ( renderTarget && renderTarget.isWebGLRenderTarget ) ) {
 
-				console.error( 'THREE.WebGLRenderer.readRenderTargetPixels: renderTarget is not THREE.WebGLRenderTarget.' );
+				error( 'WebGLRenderer.readRenderTargetPixels: renderTarget is not THREE.WebGLRenderTarget.' );
 				return;
 
 			}
@@ -76481,14 +76647,14 @@ class WebGLRenderer {
 
 					if ( ! capabilities.textureFormatReadable( textureFormat ) ) {
 
-						console.error( 'THREE.WebGLRenderer.readRenderTargetPixels: renderTarget is not in RGBA or implementation defined format.' );
+						error( 'WebGLRenderer.readRenderTargetPixels: renderTarget is not in RGBA or implementation defined format.' );
 						return;
 
 					}
 
 					if ( ! capabilities.textureTypeReadable( textureType ) ) {
 
-						console.error( 'THREE.WebGLRenderer.readRenderTargetPixels: renderTarget is not in UnsignedByteType or implementation defined type.' );
+						error( 'WebGLRenderer.readRenderTargetPixels: renderTarget is not in UnsignedByteType or implementation defined type.' );
 						return;
 
 					}
@@ -77436,3 +77602,9 @@ exports.ZeroFactor = ZeroFactor;
 exports.ZeroSlopeEnding = ZeroSlopeEnding;
 exports.ZeroStencilOp = ZeroStencilOp;
 exports.createCanvasElement = createCanvasElement;
+exports.error = error;
+exports.getConsoleFunction = getConsoleFunction;
+exports.log = log;
+exports.setConsoleFunction = setConsoleFunction;
+exports.warn = warn;
+exports.warnOnce = warnOnce;

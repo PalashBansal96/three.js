@@ -84,6 +84,14 @@ class Node extends EventDispatcher {
 		this.version = 0;
 
 		/**
+		 * The name of the node.
+		 *
+		 * @type {string}
+		 * @default ''
+		 */
+		this.name = '';
+
+		/**
 		 * Whether this node is global or not. This property is relevant for the internal
 		 * node caching system. All nodes which should be declared just once should
 		 * set this flag to `true` (a typical example is {@link AttributeNode}).
@@ -111,6 +119,8 @@ class Node extends EventDispatcher {
 		this.isNode = true;
 
 		// private
+
+		this._beforeNodes = null;
 
 		/**
 		 * The cache key of this node.
@@ -607,6 +617,16 @@ class Node extends EventDispatcher {
 
 	}
 
+	before( node ) {
+
+		if ( this._beforeNodes === null ) this._beforeNodes = [];
+
+		this._beforeNodes.push( node );
+
+		return this;
+
+	}
+
 	/**
 	 * This method performs the build of a node. The behavior and return value depend on the current build stage:
 	 * - **setup**: Prepares the node and its children for the build process. This process can also create new nodes. Returns the node itself or a variant.
@@ -624,6 +644,24 @@ class Node extends EventDispatcher {
 		if ( this !== refNode ) {
 
 			return refNode.build( builder, output );
+
+		}
+
+		//
+
+		if ( this._beforeNodes !== null ) {
+
+			const currentBeforeNodes = this._beforeNodes;
+
+			this._beforeNodes = null;
+
+			for ( const beforeNode of currentBeforeNodes ) {
+
+				beforeNode.build( builder, output );
+
+			}
+
+			this._beforeNodes = currentBeforeNodes;
 
 		}
 

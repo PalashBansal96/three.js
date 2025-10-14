@@ -2,7 +2,7 @@
 import 'https://greggman.github.io/webgpu-avoid-redundant-state-setting/webgpu-check-redundant-state-setting.js';
 //*/
 
-import { GPUFeatureName, GPULoadOp, GPUStoreOp, GPUIndexFormat, GPUTextureViewDimension } from './utils/WebGPUConstants.js';
+import { GPUFeatureName, GPULoadOp, GPUStoreOp, GPUIndexFormat, GPUTextureViewDimension, GPUFeatureMap } from './utils/WebGPUConstants.js';
 
 import WGSLNodeBuilder from './nodes/WGSLNodeBuilder.js';
 import Backend from '../common/Backend.js';
@@ -13,10 +13,9 @@ import WebGPUBindingUtils from './utils/WebGPUBindingUtils.js';
 import WebGPUPipelineUtils from './utils/WebGPUPipelineUtils.js';
 import WebGPUTextureUtils from './utils/WebGPUTextureUtils.js';
 
-import { WebGPUCoordinateSystem, TimestampQuery } from '../../constants.js';
+import { WebGPUCoordinateSystem, TimestampQuery, REVISION, HalfFloatType } from '../../constants.js';
 import WebGPUTimestampQueryPool from './utils/WebGPUTimestampQueryPool.js';
 import { warnOnce, error } from '../../utils.js';
-import { ColorManagement } from '../../math/ColorManagement.js';
 
 /**
  * A backend implementation targeting WebGPU.
@@ -83,22 +82,6 @@ class WebGPUBackend extends Backend {
 		 * @default null
 		 */
 		this.device = null;
-
-		/**
-		 * A reference to the context.
-		 *
-		 * @type {?GPUCanvasContext}
-		 * @default null
-		 */
-		this.context = null;
-
-		/**
-		 * A reference to the color attachment of the default framebuffer.
-		 *
-		 * @type {?GPUTexture}
-		 * @default null
-		 */
-		this.colorBuffer = null;
 
 		/**
 		 * A reference to the default render pass descriptor.
@@ -232,28 +215,63 @@ class WebGPUBackend extends Backend {
 
 		} );
 
-		const context = ( parameters.context !== undefined ) ? parameters.context : renderer.domElement.getContext( 'webgpu' );
-
 		this.device = device;
-		this.context = context;
-
-		const alphaMode = parameters.alpha ? 'premultiplied' : 'opaque';
-
-		const toneMappingMode = ColorManagement.getToneMappingMode( this.renderer.outputColorSpace );
-
-		this.context.configure( {
-			device: this.device,
-			format: this.utils.getPreferredCanvasFormat(),
-			usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
-			alphaMode: alphaMode,
-			toneMapping: {
-				mode: toneMappingMode
-			}
-		} );
 
 		this.trackTimestamp = this.trackTimestamp && this.hasFeature( GPUFeatureName.TimestampQuery );
 
 		this.updateSize();
+
+	}
+
+	/**
+	 * A reference to the context.
+	 *
+	 * @type {?GPUCanvasContext}
+	 * @default null
+	 */
+	get context() {
+
+		const canvasTarget = this.renderer.getCanvasTarget();
+		const canvasData = this.get( canvasTarget );
+
+		let context = canvasData.context;
+
+		if ( context === undefined ) {
+
+			const parameters = this.parameters;
+
+			if ( canvasTarget.isDefaultCanvasTarget === true && parameters.context !== undefined ) {
+
+				context = parameters.context;
+
+			} else {
+
+				context = canvasTarget.domElement.getContext( 'webgpu' );
+
+			}
+
+			// OffscreenCanvas does not have setAttribute, see #22811
+			if ( 'setAttribute' in canvasTarget.domElement ) canvasTarget.domElement.setAttribute( 'data-engine', `three.js r${ REVISION } webgpu` );
+
+			const alphaMode = parameters.alpha ? 'premultiplied' : 'opaque';
+
+			const toneMappingMode = parameters.outputType === HalfFloatType ? 'extended' : 'standard';
+
+			context.configure( {
+				device: this.device,
+				format: this.utils.getPreferredCanvasFormat(),
+				usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+				alphaMode: alphaMode,
+				toneMapping: {
+					mode: toneMappingMode
+				}
+			} );
+
+			canvasData.context = context;
+
+		}
+
+		return context;
 
 	}
 
@@ -306,19 +324,22 @@ class WebGPUBackend extends Backend {
 	 */
 	_getDefaultRenderPassDescriptor() {
 
-		let descriptor = this.defaultRenderPassdescriptor;
+		const renderer = this.renderer;
+		const canvasTarget = renderer.getCanvasTarget();
+		const canvasData = this.get( canvasTarget );
+		const samples = renderer.currentSamples;
 
-		if ( descriptor === null ) {
+		let descriptor = canvasData.descriptor;
 
-			const renderer = this.renderer;
+		if ( descriptor === undefined || canvasData.samples !== samples ) {
 
 			descriptor = {
 				colorAttachments: [ {
 					view: null
-				} ],
+				} ]
 			};
 
-			if ( this.renderer.depth === true || this.renderer.stencil === true ) {
+			if ( renderer.depth === true || renderer.stencil === true ) {
 
 				descriptor.depthStencilAttachment = {
 					view: this.textureUtils.getDepthBuffer( renderer.depth, renderer.stencil ).createView()
@@ -328,9 +349,9 @@ class WebGPUBackend extends Backend {
 
 			const colorAttachment = descriptor.colorAttachments[ 0 ];
 
-			if ( this.renderer.samples > 0 ) {
+			if ( samples > 0 ) {
 
-				colorAttachment.view = this.colorBuffer.createView();
+				colorAttachment.view = this.textureUtils.getColorBuffer().createView();
 
 			} else {
 
@@ -338,13 +359,14 @@ class WebGPUBackend extends Backend {
 
 			}
 
-			this.defaultRenderPassdescriptor = descriptor;
+			canvasData.descriptor = descriptor;
+			canvasData.samples = samples;
 
 		}
 
 		const colorAttachment = descriptor.colorAttachments[ 0 ];
 
-		if ( this.renderer.samples > 0 ) {
+		if ( samples > 0 ) {
 
 			colorAttachment.resolveTarget = this.context.getCurrentTexture().createView();
 
@@ -567,10 +589,6 @@ class WebGPUBackend extends Backend {
 	beginRender( renderContext ) {
 
 		const renderContextData = this.get( renderContext );
-
-		//
-
-		renderContextData.frameCalls = this.renderer.info.render.frameCalls;
 
 		//
 
@@ -1293,10 +1311,6 @@ class WebGPUBackend extends Backend {
 
 		//
 
-		groupGPU.frameCalls = this.renderer.info.compute.frameCalls;
-
-		//
-
 		const descriptor = {
 			label: 'computeGroup_' + computeGroup.id
 		};
@@ -1418,19 +1432,6 @@ class WebGPUBackend extends Backend {
 		groupData.passEncoderGPU.end();
 
 		this.device.queue.submit( [ groupData.cmdEncoderGPU.finish() ] );
-
-	}
-
-	/**
-	 * Can be used to synchronize CPU operations with GPU tasks. So when this method is called,
-	 * the CPU waits for the GPU to complete its operation (e.g. a compute task).
-	 *
-	 * @async
-	 * @return {Promise} A Promise that resolves when synchronization has been finished.
-	 */
-	async waitForGPU() {
-
-		await this.device.queue.onSubmittedWorkDone();
 
 	}
 
@@ -1834,24 +1835,14 @@ class WebGPUBackend extends Backend {
 	// textures
 
 	/**
-	 * Creates a GPU sampler for the given texture.
+	 * Updates a GPU sampler for the given texture.
 	 *
-	 * @param {Texture} texture - The texture to create the sampler for.
+	 * @param {Texture} texture - The texture to update the sampler for.
+	 * @return {string} The current sampler key.
 	 */
-	createSampler( texture ) {
+	updateSampler( texture ) {
 
-		this.textureUtils.createSampler( texture );
-
-	}
-
-	/**
-	 * Destroys the GPU sampler for the given texture.
-	 *
-	 * @param {Texture} texture - The texture to destroy the sampler for.
-	 */
-	destroySampler( texture ) {
-
-		this.textureUtils.destroySampler( texture );
+		return this.textureUtils.updateSampler( texture );
 
 	}
 
@@ -1860,10 +1851,11 @@ class WebGPUBackend extends Backend {
 	 * as a placeholder until the actual texture is ready for usage.
 	 *
 	 * @param {Texture} texture - The texture to create a default texture for.
+	 * @return {boolean} Whether the sampler has been updated or not.
 	 */
 	createDefaultTexture( texture ) {
 
-		this.textureUtils.createDefaultTexture( texture );
+		return this.textureUtils.createDefaultTexture( texture );
 
 	}
 
@@ -1906,10 +1898,11 @@ class WebGPUBackend extends Backend {
 	 * Destroys the GPU data for the given texture object.
 	 *
 	 * @param {Texture} texture - The texture.
+	 * @param {boolean} [isDefaultTexture=false] - Whether the texture uses a default GPU texture or not.
 	 */
-	destroyTexture( texture ) {
+	destroyTexture( texture, isDefaultTexture = false ) {
 
-		this.textureUtils.destroyTexture( texture );
+		this.textureUtils.destroyTexture( texture, isDefaultTexture );
 
 	}
 
@@ -1957,7 +1950,7 @@ class WebGPUBackend extends Backend {
 			querySet: timestampQueryPool.querySet,
 			beginningOfPassWriteIndex: baseOffset,
 			endOfPassWriteIndex: baseOffset + 1,
-		  };
+		};
 
 	}
 
@@ -2209,8 +2202,7 @@ class WebGPUBackend extends Backend {
 	 */
 	updateSize() {
 
-		this.colorBuffer = this.textureUtils.getColorBuffer();
-		this.defaultRenderPassdescriptor = null;
+		this.delete( this.renderer.getCanvasTarget() );
 
 	}
 
@@ -2234,6 +2226,8 @@ class WebGPUBackend extends Backend {
 	 * @return {boolean} Whether the feature is supported or not.
 	 */
 	hasFeature( name ) {
+
+		if ( GPUFeatureMap[ name ] !== undefined ) name = GPUFeatureMap[ name ];
 
 		return this.device.features.has( name );
 
@@ -2448,6 +2442,12 @@ class WebGPUBackend extends Backend {
 			this.textureUtils.generateMipmaps( texture );
 
 		}
+
+	}
+
+	dispose() {
+
+		this.textureUtils.dispose();
 
 	}
 
